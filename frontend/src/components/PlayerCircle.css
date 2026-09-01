@@ -1,0 +1,99 @@
+.player-circle {
+  position: relative;
+  width: min(280px, 70vw);
+  height: min(280px, 70vw);
+  margin: 0 auto;
+  flex-shrink: 0;
+}
+
+.player-circle-center {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 90px;
+  height: 90px;
+}
+
+.countdown-number {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 3.5rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.countdown-paused {
+  font-size: 2.5rem;
+  color: #FFC857;
+}
+
+.player-avatar {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  margin-top: -45px;
+  margin-left: -45px;
+  width: 90px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.player-avatar-circle {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: #4A4A5E;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 1.4rem;
+  font-weight: 600;
+  color: #F2F2F2;
+  border: 2px solid transparent;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.player-avatar.picked .player-avatar-circle {
+  border-color: #00D9C0;
+}
+
+.player-avatar.dnf .player-avatar-circle {
+  opacity: 0.4;
+}
+
+.picked-dot {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #00D9C0;
+  border: 2px solid #1A1A2E;
+}
+
+.player-name {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.75rem;
+  color: #F2F2F2;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.player-hearts {
+  font-size: 0.65rem;
+  line-height: 1;
+}
+
+.player-wins {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.7rem;
+  color: #FFC857;
+}

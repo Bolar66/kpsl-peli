@@ -1,0 +1,36 @@
+### Rekisteröinti
+POST http://localhost:3001/api/auth/register
+Content-Type: application/json
+
+{
+  "username": "testaaja1",
+  "password": "salasana123"
+}
+
+### Kirjautuminen
+POST http://localhost:3001/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "testaaja1",
+  "password": "salasana123"
+}
+
+### Väärä salasana
+POST http://localhost:3001/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "testaaja1",
+  "password": "vaarasalasana"
+}
+
+### Luo huone
+POST http://localhost:3001/api/games
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjEsInVzZXJuYW1lIjoidGVzdGFhamExIiwiaWF0IjoxNzg4MjU3NTYyLCJleHAiOjE3OTA4NDk1NjJ9.LPwYaf-9GrpkCWqy7Jtz54QOwZcSUU1Le72mORu09mA
+
+{
+  "mode": "extended",
+  "winsRequired": 3
+}

@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Socket testi</title>
+</head>
+<body>
+  <h2>Socket.IO testi</h2>
+  <input id="username" placeholder="Käyttäjänimi" value="testi1">
+  <input id="roomCode" placeholder="Huonekoodi" value="86AJ">
+  <button onclick="join()">Liity huoneeseen</button>
+
+  <h3>Pelaajat huoneessa:</h3>
+  <ul id="players"></ul>
+
+  <div id="hostControls" style="display:none;">
+    Voittoja vaadittu: <input id="winsRequired" type="number" value="2" style="width:50px;">
+    Moodi:
+    <select id="modeSelect">
+      <option value="classic">Klassinen</option>
+      <option value="extended">KPSL-Spock</option>
+    </select>
+    <button onclick="startGame()">Aloita peli</button>
+  </div>
+  <div id="waitingMessage" style="display:none; color: gray;">
+    Odotetaan että host aloittaa pelin...
+  </div>
+
+  <h3 id="roundStatus"></h3>
+  <h1 id="countdown"></h1>
+
+  <div id="pickButtons" style="display:none;">
+    <button onclick="pick('rock')">Kivi</button>
+    <button onclick="pick('paper')">Paperi</button>
+    <button onclick="pick('scissors')">Sakset</button>
+    <button onclick="pick('lizard')" class="extendedBtn" style="display:none;">Lisko</button>
+    <button onclick="pick('spock')" class="extendedBtn" style="display:none;">Spock</button>
+  </div>
+  <p id="pickStatus"></p>
+  <p id="pickCount"></p>
+
+  <h3 id="revealTitle"></h3>
+  <ul id="revealResults"></ul>
+  <h4>Voitot yhteensä:</h4>
+  <ul id="winsList"></ul>
+
+  <h2 id="gameOverMsg" style="color: green;"></h2>
+
+  <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
+  <script>
+    const socket = io('http://localhost:3001');
+    let currentRoomCode = '';
+    let countdownInterval = null;
+    let hasPicked = false;
+
+    socket.on('connect', () => {
+      console.log('Yhdistetty socketiin:', socket.id);
+    });
+
+    socket.on('room:players', ({ players }) => {
+      const list = document.getElementById('players');
+      list.innerHTML = '';
+      players.forEach(p => {
+        const li = document.createElement('li');
+        li.textContent = p.username + (p.isHost ? ' 👑 (host)' : '');
+        list.appendChild(li);
+      });
+
+      const me = players.find(p => p.socketId === socket.id);
+      document.getElementById('hostControls').style.display = me && me.isHost ? 'block' : 'none';
+      document.getElementById('waitingMessage').style.display = me && !me.isHost ? 'block' : 'none';
+    });
+
+    socket.on('round:start', ({ roundNumber, duration, mode }) => {
+      hasPicked = false;
+      document.getElementById('waitingMessage').style.display = 'none';
+      document.getElementById('roundStatus').textContent = 'Kierros ' + roundNumber + ' (' + mode + ')';
+      document.getElementById('pickButtons').style.display = 'block';
+      document.getElementById('pickStatus').textContent = '';
+      document.getElementById('pickCount').textContent = '';
+      document.getElementById('revealTitle').textContent = '';
+      document.getElementById('revealResults').innerHTML = '';
+      document.getElementById('gameOverMsg').textContent = '';
+
+      document.querySelectorAll('.extendedBtn').forEach(btn => {
+        btn.style.display = mode === 'extended' ? 'inline-block' : 'none';
+      });
+
+      let remaining = duration;
+      document.getElementById('countdown').textContent = remaining;
+
+      if (countdownInterval) clearInterval(countdownInterval);
+      countdownInterval = setInterval(() => {
+        remaining--;
+        document.getElementById('countdown').textContent = remaining > 0 ? remaining : '0';
+        if (remaining <= 0) clearInterval(countdownInterval);
+      }, 1000);
+    });
+
+    socket.on('pick:count', ({ picked, total }) => {
+      document.getElementById('pickCount').textContent = picked + ' / ' + total + ' pelaajaa on valinnut';
+    });
+
+    socket.on('round:reveal', ({ roundNumber, results, winners, isDraw, wins }) => {
+      if (countdownInterval) clearInterval(countdownInterval);
+      document.getElementById('pickButtons').style.display = 'none';
+      document.getElementById('roundStatus').textContent = 'Kierros ' + roundNumber + ' — paljastus';
+      document.getElementById('revealTitle').textContent = isDraw
+        ? 'Tasapeli!'
+        : 'Voittaja(t): ' + winners.join(', ');
+
+      const list = document.getElementById('revealResults');
+      list.innerHTML = '';
+      results.forEach(r => {
+        const li = document.createElement('li');
+        li.textContent = r.username + ': ' + (r.symbol || 'ei valintaa');
+        list.appendChild(li);
+      });
+
+      const winsList = document.getElementById('winsList');
+      winsList.innerHTML = '';
+      wins.forEach(w => {
+        const li = document.createElement('li');
+        li.textContent = w.username + ': ' + w.wins + ' voittoa';
+        winsList.appendChild(li);
+      });
+    });
+
+    socket.on('game:over', ({ winner, finalWins }) => {
+      document.getElementById('gameOverMsg').textContent = '🏆 Peli päättyi! Voittaja: ' + winner;
+    });
+
+    socket.on('error:message', ({ message }) => {
+      alert(message);
+    });
+
+    function join() {
+      const username = document.getElementById('username').value;
+      currentRoomCode = document.getElementById('roomCode').value;
+      socket.emit('room:join', { roomCode: currentRoomCode, username });
+    }
+
+    function startGame() {
+      const winsRequired = parseInt(document.getElementById('winsRequired').value) || 3;
+      const mode = document.getElementById('modeSelect').value;
+      socket.emit('game:start', { roomCode: currentRoomCode, winsRequired, mode });
+    }
+
+    function pick(symbol) {
+      if (hasPicked) return;
+      hasPicked = true;
+      socket.emit('pick:submit', { roomCode: currentRoomCode, symbol });
+      document.getElementById('pickStatus').textContent = 'Valitsit: ' + symbol;
+    }
+  </script>
+</body>
+</html>
