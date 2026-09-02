@@ -80,6 +80,11 @@ const pendingNextRoundNumber: Record<string, number> = {};
 const heartsByRoom: Record<string, Record<number, number>> = {};
 const dnfByRoom: Record<string, Set<number>> = {};
 
+const gameSpeed: Record<string, 'fast' | 'relaxed'> = {};
+const roundGapSeconds: Record<string, number> = {};
+const readyPlayers: Record<string, Set<number>> = {};
+const awaitingReady: Record<string, boolean> = {};
+
 function getRoundDuration(roundNumber: number): number {
   return roundNumber === 1 ? 10 : 5;
 }
@@ -144,11 +149,6 @@ function broadcastPauseState(roomCode: string) {
   io.to(roomCode).emit('game:pause', { paused: waitingNames.length > 0, waitingFor: waitingNames });
 }
 
-function heartsSnapshot(roomCode: string) {
-  const players = roomPlayers[roomCode] || [];
-  return players.map(p => ({ username: p.username, hearts: heartsByRoom[roomCode]?.[p.userId] ?? STARTING_HEARTS }));
-}
-
 function cleanupRoom(roomCode: string) {
   clearTimeout(roundTimers[roomCode]);
   clearTimeout(nextRoundTimers[roomCode]);
@@ -159,6 +159,8 @@ function cleanupRoom(roomCode: string) {
   delete gameIdByRoom[roomCode]; delete symbolStatsByRoom[roomCode]; delete gameStarted[roomCode];
   delete roundPaused[roomCode]; delete pendingNextRoundNumber[roomCode];
   delete heartsByRoom[roomCode]; delete dnfByRoom[roomCode];
+  delete gameSpeed[roomCode]; delete roundGapSeconds[roomCode];
+  delete readyPlayers[roomCode]; delete awaitingReady[roomCode];
   console.log(`Huone ${roomCode}: siivottu kokonaan`);
 }
 
@@ -197,26 +199,55 @@ function checkAllPicked(roomCode: string, roundNumber: number) {
   }
 }
 
-function startRound(roomCode: string, roundNumber: number, resetDnf: boolean = true) {
-  if (resetDnf) dnfByRoom[roomCode] = new Set();
-  roundPaused[roomCode] = false;
-  currentRound[roomCode] = roundNumber;
-  roundPicks[roomCode] = {};
-
-  const duration = getRoundDuration(roundNumber);
-  const dnfNames = Array.from(dnfByRoom[roomCode] || []).map(
-    id => roomPlayers[roomCode]?.find(p => p.userId === id)?.username
-  ).filter(Boolean);
-
-  io.to(roomCode).emit('round:start', { roundNumber, duration, mode: gameMode[roomCode], dnf: dnfNames, hearts: heartsSnapshot(roomCode) });
-  console.log(`Huone ${roomCode}: kierros ${roundNumber} alkoi (${duration}s)`);
+function startReadyCheck(roomCode: string, reason: 'game-start' | 'round-gap' | 'manual-pause') {
+  awaitingReady[roomCode] = true;
+  readyPlayers[roomCode] = new Set();
 
   const players = roomPlayers[roomCode] || [];
-  players.filter(p => p.isBot && !dnfByRoom[roomCode]?.has(p.userId)).forEach(p => {
-    submitPick(roomCode, p.userId, getRandomSymbol(gameMode[roomCode] || 'classic'));
+  players.forEach(p => {
+    if (p.isBot) readyPlayers[roomCode]!.add(p.userId);
   });
 
-  roundTimers[roomCode] = setTimeout(() => handleTimeout(roomCode, roundNumber), duration * 1000);
+  const readyNames = players.filter(p => readyPlayers[roomCode]!.has(p.userId)).map(p => p.username);
+  io.to(roomCode).emit('ready:check', { reason, readyNames, total: players.length });
+
+  checkAllReady(roomCode);
+}
+
+function checkAllReady(roomCode: string) {
+  if (!awaitingReady[roomCode]) return;
+  const players = roomPlayers[roomCode] || [];
+  const connectedOrBot = players.filter(p => p.isConnected || p.isBot);
+
+  if (connectedOrBot.length > 0 && connectedOrBot.every(p => readyPlayers[roomCode]?.has(p.userId))) {
+    awaitingReady[roomCode] = false;
+    io.to(roomCode).emit('ready:allReady');
+
+    const nextRound = (currentRound[roomCode] && currentRound[roomCode]! > 0) ? currentRound[roomCode]! + 1 : 1;
+    setTimeout(() => startRound(roomCode, nextRound), 800);
+  }
+}
+
+function startRound(roomCode: string, roundNumber: number) {
+  const duration = getRoundDuration(roundNumber);
+
+  currentRound[roomCode] = roundNumber;
+  roundPicks[roomCode] = {};
+  roundPaused[roomCode] = false;
+
+  io.to(roomCode).emit('round:start', { roundNumber, duration, mode: gameMode[roomCode] });
+  console.log(`Huone ${roomCode}: kierros ${roundNumber} alkoi, ${duration}s`);
+
+  const players = roomPlayers[roomCode] || [];
+  const symbols = gameMode[roomCode] === 'extended' ? SYMBOLS_EXTENDED : SYMBOLS_CLASSIC;
+  players.filter(p => p.isBot).forEach(p => {
+    const randomSymbol = symbols[Math.floor(Math.random() * symbols.length)]!;
+    submitPick(roomCode, p.userId, randomSymbol);
+  });
+
+  roundTimers[roomCode] = setTimeout(() => {
+    handleTimeout(roomCode, roundNumber);
+  }, duration * 1000);
 }
 
 function handleTimeout(roomCode: string, roundNumber: number) {
@@ -250,7 +281,7 @@ function handleTimeout(roomCode: string, roundNumber: number) {
 
     if (restarted) {
       io.to(roomCode).emit('round:retry', { reason: 'missed-pick' });
-      startRound(roomCode, roundNumber, false);
+      startRound(roomCode, roundNumber);
       return;
     }
 
@@ -295,11 +326,7 @@ function resolveRound(roomCode: string, roundNumber: number) {
       roundPicks[roomCode]![p.userId] = getRandomSymbol(mode);
     });
     const duration = getRoundDuration(roundNumber);
-    io.to(roomCode).emit('round:start', {
-      roundNumber, duration, mode,
-      dnf: Array.from(dnfSet).map(id => players.find(p => p.userId === id)?.username).filter(Boolean),
-      hearts: heartsSnapshot(roomCode),
-    });
+    io.to(roomCode).emit('round:start', { roundNumber, duration, mode });
     roundTimers[roomCode] = setTimeout(() => handleTimeout(roomCode, roundNumber), duration * 1000);
     return;
   }
@@ -352,7 +379,7 @@ async function finalizeRound(
   const winnerNames = players.filter(p => winnerUserIds.includes(p.userId)).map(p => p.username);
 
   io.to(roomCode).emit('round:reveal', {
-    roundNumber, results: resultsOut, winners: winnerNames, isDraw, wins: winsSnapshot, hearts: heartsSnapshot(roomCode),
+    roundNumber, results: resultsOut, winners: winnerNames, isDraw, wins: winsSnapshot,
   });
   console.log(`Huone ${roomCode}: kierros ${roundNumber} paljastettu, voittajat: ${winnerNames.join(', ') || 'ei ketään'}`);
 
@@ -385,21 +412,19 @@ async function finalizeRound(
         await finalizeGame(gameId, mode, playerWins, symbolStatsByRoom[roomCode] || {});
       } catch (err) { console.error('Statsien tallennus epäonnistui:', err); }
     }
-
-    // Ei siivota huonetta kokonaan: pelaajat jäävät odottamaan replay/lobby-valintaa
-    gameStarted[roomCode] = false;
-    roundPaused[roomCode] = false;
-    delete pendingNextRoundNumber[roomCode];
+    cleanupRoom(roomCode);
     return;
   }
 
-  if (anyPlayerWaiting(roomCode)) {
-    pendingNextRoundNumber[roomCode] = roundNumber + 1;
-    broadcastPauseState(roomCode);
-    return;
+  const speed = gameSpeed[roomCode] || 'fast';
+  if (speed === 'relaxed') {
+    startReadyCheck(roomCode, 'round-gap');
+  } else {
+    const gapMs = (roundGapSeconds[roomCode] || 3) * 1000;
+    nextRoundTimers[roomCode] = setTimeout(() => {
+      startRound(roomCode, roundNumber + 1);
+    }, gapMs);
   }
-
-  nextRoundTimers[roomCode] = setTimeout(() => startRound(roomCode, roundNumber + 1), 3000);
 }
 
 function convertToBot(roomCode: string, userId: number) {
@@ -414,7 +439,14 @@ function convertToBot(roomCode: string, userId: number) {
   io.to(roomCode).emit('room:players', { players: roomPlayers[roomCode] });
 
   if (!hasConnectedPlayers(roomCode)) { cleanupRoom(roomCode); return; }
-  checkResumeAfterPlayerReady(roomCode);
+
+  if (awaitingReady[roomCode]) {
+    if (!readyPlayers[roomCode]) readyPlayers[roomCode] = new Set();
+    readyPlayers[roomCode]!.add(userId);
+    checkAllReady(roomCode);
+  } else {
+    checkResumeAfterPlayerReady(roomCode);
+  }
 }
 
 function checkResumeAfterPlayerReady(roomCode: string) {
@@ -423,7 +455,7 @@ function checkResumeAfterPlayerReady(roomCode: string) {
 
   if (roundPaused[roomCode]) {
     const roundNumber = currentRound[roomCode];
-    if (roundNumber && roundNumber !== -1) startRound(roomCode, roundNumber, false);
+    if (roundNumber && roundNumber !== -1) startRound(roomCode, roundNumber);
     return;
   }
   if (pendingNextRoundNumber[roomCode] !== undefined) {
@@ -467,27 +499,12 @@ io.on('connection', (socket: AuthenticatedSocket) => {
     if (wasWaiting) checkResumeAfterPlayerReady(roomCode);
   });
 
-  socket.on('room:leave', ({ roomCode }: { roomCode: string }) => {
+  socket.on('game:start', async ({ roomCode, winsRequired: reqWins, mode, speed, roundGap }: {
+    roomCode: string; winsRequired?: number; mode?: 'classic' | 'extended'; speed?: 'fast' | 'relaxed'; roundGap?: number;
+  }) => {
     const players = roomPlayers[roomCode];
     if (!players) return;
-    const player = players.find(p => p.socketId === socket.id);
-    if (!player) return;
 
-    const wasHost = player.isHost;
-    roomPlayers[roomCode] = players.filter(p => p.userId !== player.userId);
-    socket.leave(roomCode);
-
-    if (roomPlayers[roomCode]!.length === 0) {
-      cleanupRoom(roomCode);
-      return;
-    }
-    if (wasHost) roomPlayers[roomCode]![0]!.isHost = true;
-    io.to(roomCode).emit('room:players', { players: roomPlayers[roomCode] });
-  });
-
-  socket.on('game:start', async ({ roomCode, winsRequired: reqWins, mode }: { roomCode: string; winsRequired?: number; mode?: 'classic' | 'extended' }) => {
-    const players = roomPlayers[roomCode];
-    if (!players) return;
     const player = players.find(p => p.socketId === socket.id);
     if (!player || !player.isHost) {
       socket.emit('error:message', { message: 'Vain host voi aloittaa pelin' });
@@ -505,15 +522,34 @@ io.on('connection', (socket: AuthenticatedSocket) => {
 
     winsRequired[roomCode] = reqWins || 3;
     gameMode[roomCode] = mode === 'extended' ? 'extended' : 'classic';
+    gameSpeed[roomCode] = speed === 'relaxed' ? 'relaxed' : 'fast';
+    roundGapSeconds[roomCode] = Math.min(Math.max(roundGap || 3, 2), 10);
     gameWins[roomCode] = {};
     symbolStatsByRoom[roomCode] = {};
     heartsByRoom[roomCode] = {};
     players.forEach(p => { heartsByRoom[roomCode]![p.userId] = STARTING_HEARTS; });
     gameStarted[roomCode] = true;
-    startRound(roomCode, 1);
+
+    startReadyCheck(roomCode, 'game-start');
   });
 
-  socket.on('game:replay', async ({ roomCode, autoStart, mode, winsRequired: reqWins }: { roomCode: string; autoStart: boolean; mode?: 'classic' | 'extended'; winsRequired?: number }) => {
+  socket.on('ready:submit', ({ roomCode }: { roomCode: string }) => {
+    if (!socket.userId) return;
+    if (!awaitingReady[roomCode]) return;
+
+    if (!readyPlayers[roomCode]) readyPlayers[roomCode] = new Set();
+    readyPlayers[roomCode]!.add(socket.userId);
+
+    const players = roomPlayers[roomCode] || [];
+    const readyNames = players.filter(p => readyPlayers[roomCode]!.has(p.userId)).map(p => p.username);
+    io.to(roomCode).emit('ready:status', { readyNames, total: players.length });
+
+    checkAllReady(roomCode);
+  });
+
+  socket.on('game:replay', async ({ roomCode, autoStart, mode, winsRequired: reqWins }: {
+    roomCode: string; autoStart: boolean; mode?: 'classic' | 'extended'; winsRequired?: number;
+  }) => {
     const players = roomPlayers[roomCode];
     if (!players) return;
     const player = players.find(p => p.socketId === socket.id);
@@ -546,7 +582,7 @@ io.on('connection', (socket: AuthenticatedSocket) => {
 
     if (autoStart) {
       gameStarted[roomCode] = true;
-      startRound(roomCode, 1);
+      startReadyCheck(roomCode, 'game-start');
     } else {
       gameStarted[roomCode] = false;
       io.to(roomCode).emit('game:reset', { mode: finalMode, winsRequired: finalWins });
@@ -556,6 +592,25 @@ io.on('connection', (socket: AuthenticatedSocket) => {
   socket.on('pick:submit', ({ roomCode, symbol }: { roomCode: string; symbol: string }) => {
     if (!socket.userId) return;
     submitPick(roomCode, socket.userId, symbol);
+  });
+
+  socket.on('game:pauseToggle', ({ roomCode }: { roomCode: string }) => {
+    const players = roomPlayers[roomCode];
+    if (!players || !socket.userId) return;
+    const player = players.find(p => p.userId === socket.userId);
+    if (!player) return;
+
+    const roundNumber = currentRound[roomCode];
+    const isRoundActive = roundNumber && roundNumber !== -1 && !roundPaused[roomCode] && !awaitingReady[roomCode];
+
+    if (isRoundActive) {
+      // Kesken kierroksen: ei vaikuta muihin, kerrotaan vain painajalle että hän avasi oman menunsa
+      socket.emit('game:personalPauseAck', { open: true });
+    } else if (!awaitingReady[roomCode]) {
+      // Kierrosten välissä: pysäytetään kaikilta
+      io.to(roomCode).emit('game:pausedBy', { username: player.username });
+      startReadyCheck(roomCode, 'manual-pause');
+    }
   });
 
   socket.on('disconnect', () => {
