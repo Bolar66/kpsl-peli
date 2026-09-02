@@ -1,0 +1,74 @@
+.lobby-page-outer {
+  height: 100dvh;
+  width: 100dvw;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.lobby-page {
+  width: 360px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px;
+  gap: 18px;
+  transform-origin: center center;
+}
+
+.lobby-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
+.lobby-username {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 1.1rem;
+}
+
+.lobby-card {
+  background: #2D2D44;
+  border-radius: 20px;
+  padding: 22px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.lobby-card-title {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 1.1rem;
+  margin: 0;
+}
+
+.lobby-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.9rem;
+}
+
+.lobby-row select,
+.lobby-row input,
+.lobby-join-input {
+  background: #1A1A2E;
+  color: #F2F2F2;
+  border: 1px solid #4A4A5E;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-family: 'Inter', sans-serif;
+}
+
+.lobby-join-input {
+  width: 100%;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  text-align: center;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 1rem;
+}

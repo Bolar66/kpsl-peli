@@ -1,14 +1,19 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { register } from '../api/auth';
 import { useAuth } from '../context/AuthContext';
+import './Auth.css';
 
 export default function Register() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const { setAuth } = useAuth();
+  const { token, setAuth } = useAuth();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (token) navigate('/lobby');
+  }, [token, navigate]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -23,28 +28,28 @@ export default function Register() {
   }
 
   return (
-    <div>
-      <h1>Rekisteröidy</h1>
-      <form onSubmit={handleSubmit}>
-        <div>
+    <div className="auth-page">
+      <div className="auth-card">
+        <h1 className="auth-title">Rekisteröidy</h1>
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           <input
+            className="auth-input"
             placeholder="Käyttäjätunnus"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
           />
-        </div>
-        <div>
           <input
+            className="auth-input"
             type="password"
             placeholder="Salasana"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
           />
-        </div>
-        {error && <p style={{ color: 'red' }}>{error}</p>}
-        <button type="submit">Rekisteröidy</button>
-      </form>
-      <p>Onko jo tili? <Link to="/login">Kirjaudu</Link></p>
+          {error && <p className="auth-error">{error}</p>}
+          <button type="submit" className="btn btn-primary">Rekisteröidy</button>
+        </form>
+        <p className="auth-switch">Onko jo tili? <Link to="/login">Kirjaudu</Link></p>
+      </div>
     </div>
   );
 }

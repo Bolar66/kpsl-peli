@@ -6,7 +6,9 @@ import { useAutoScale } from '../hooks/useAutoScale';
 import PlayerCircle from '../components/PlayerCircle';
 import Leaderboard from '../components/Leaderboard';
 import PickButtons from '../components/PickButtons';
+import GameOverModal from '../components/GameOverModal';
 import '../components/PlayerCircle.css';
+import '../components/PlayerHand.css';
 import '../components/Leaderboard.css';
 import '../components/PickButtons.css';
 import './Room.css';
@@ -45,12 +47,13 @@ export default function Room() {
   const { token, user } = useAuth();
   const { socket, connected } = useSocket(token);
   const navigate = useNavigate();
-  const { containerRef, scale } = useAutoScale<HTMLDivElement>(400, 700);
+  const { containerRef, scale } = useAutoScale<HTMLDivElement>(400, 760);
 
   const [players, setPlayers] = useState<Player[]>([]);
   const [mode, setMode] = useState<'classic' | 'extended'>('classic');
   const [winsRequired, setWinsRequired] = useState(3);
   const [roundNumber, setRoundNumber] = useState<number | null>(null);
+  const [duration, setDuration] = useState(10);
   const [countdown, setCountdown] = useState<number | null>(null);
   const [hasPicked, setHasPicked] = useState(false);
   const [pickCount, setPickCount] = useState<{ picked: number; total: number; pickedNames: string[] } | null>(null);
@@ -77,7 +80,7 @@ export default function Room() {
 
     socket.on('room:players', ({ players }: { players: Player[] }) => setPlayers(players));
 
-    socket.on('round:start', ({ roundNumber, duration, mode, dnf, hearts }: {
+    socket.on('round:start', ({ roundNumber, duration: roundDuration, mode, dnf, hearts }: {
       roundNumber: number; duration: number; mode: 'classic' | 'extended'; dnf: string[]; hearts: HeartsEntry[];
     }) => {
       setRoundNumber(roundNumber);
@@ -86,7 +89,8 @@ export default function Room() {
       setPickCount(null);
       setRevealResults(null);
       setGameOverWinner(null);
-      setCountdown(duration);
+      setDuration(roundDuration);
+      setCountdown(roundDuration);
       setDnfPlayers(dnf || []);
       setHearts(hearts || []);
       setRetryMessage('');
@@ -180,6 +184,7 @@ export default function Room() {
     isConnected: p.isConnected,
     hasPicked: revealResults === null && (pickCount?.pickedNames.includes(p.username) ?? false),
     isDnf: dnfPlayers.includes(p.username),
+    revealedSymbol: revealResults?.find(r => r.username === p.username)?.symbol ?? null,
   }));
 
   const leaderboardEntries = players.map(p => ({
@@ -190,7 +195,7 @@ export default function Room() {
 
   return (
     <div className="room-page-outer">
-      <div className="room-page" ref={containerRef} style={{ transform: `scale(${scale})` }}>
+      <div className={`room-page ${gameOverWinner ? 'dimmed' : ''}`} ref={containerRef} style={{ transform: `scale(${scale})` }}>
         <div className="room-header">
           <span className="room-code-label">{roomCode}</span>
           <span>
@@ -248,7 +253,13 @@ export default function Room() {
               <div className="status-message pause">⏸ Odotetaan: {waitingFor.join(', ')}</div>
             )}
 
-            <PlayerCircle players={circlePlayers} countdown={countdown} paused={paused} />
+            <PlayerCircle
+              players={circlePlayers}
+              countdown={countdown}
+              duration={duration}
+              paused={paused}
+              isRevealPhase={revealResults !== null}
+            />
 
             {!revealResults && !iAmDnf && (
               <PickButtons mode={mode} onPick={handlePick} disabled={hasPicked || paused} hasPicked={hasPicked} />
@@ -278,25 +289,15 @@ export default function Room() {
             )}
           </>
         )}
-
-        {gameOverWinner && (
-          <div className="game-over-panel">
-            <h2 className="game-over-title">🏆 {gameOverWinner} voitti pelin!</h2>
-            {isHost ? (
-              <div className="btn-row">
-                <button className="btn btn-primary" onClick={handleReplay}>Pelaa uudestaan</button>
-                <button className="btn btn-secondary" onClick={handleBackToLobby}>Takaisin lobbyyn</button>
-                <button className="btn btn-secondary" onClick={handleExit}>Exit game</button>
-              </div>
-            ) : (
-              <div className="btn-row">
-                <p className="round-label">Odotetaan hostin päätöstä...</p>
-                <button className="btn btn-secondary" onClick={handleExit}>Exit game</button>
-              </div>
-            )}
-          </div>
-        )}
       </div>
+
+      <GameOverModal
+        winner={gameOverWinner}
+        isHost={isHost}
+        onReplay={handleReplay}
+        onBackToLobby={handleBackToLobby}
+        onExit={handleExit}
+      />
     </div>
   );
 }
