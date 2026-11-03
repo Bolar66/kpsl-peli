@@ -1,4 +1,7 @@
-const API_URL = 'http://localhost:3001/api';
+import { API_URL } from '../config';
+
+// Kirjautuminen on vanhentunut tai virheellinen — kutsujan kannattaa kirjata käyttäjä ulos
+export class AuthError extends Error {}
 
 export interface Game {
   id: number;
@@ -19,6 +22,9 @@ export async function createGame(token: string, mode: string, winsRequired: numb
   });
 
   const data = await res.json();
+  if (res.status === 401 || res.status === 403) {
+    throw new AuthError('Kirjautuminen on vanhentunut, kirjaudu uudelleen');
+  }
   if (!res.ok) {
     throw new Error(data.error || 'Huoneen luonti epäonnistui');
   }
@@ -35,6 +41,9 @@ export async function joinGame(token: string, roomCode: string): Promise<{ gameI
   });
 
   const data = await res.json();
+  if (res.status === 401 || res.status === 403) {
+    throw new AuthError('Kirjautuminen on vanhentunut, kirjaudu uudelleen');
+  }
   if (!res.ok) {
     throw new Error(data.error || 'Huoneeseen liittyminen epäonnistui');
   }

@@ -4,66 +4,54 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 24px;
-  gap: 24px;
+  padding: 32px 16px;
+  gap: 28px;
 }
 
-.auth-card {
-  background: #2D2D44;
-  border-radius: 20px;
-  padding: 32px 24px;
-  width: 100%;
-  max-width: 340px;
+.auth-hero {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-}
-
-.auth-title {
-  font-family: 'Space Grotesk', sans-serif;
-  font-size: 1.6rem;
+  align-items: center;
+  gap: 14px;
   text-align: center;
-  margin: 0 0 8px;
 }
 
-.auth-input {
-  background: #1A1A2E;
-  color: #F2F2F2;
-  border: 1px solid #4A4A5E;
-  border-radius: 10px;
-  padding: 12px 14px;
-  font-family: 'Inter', sans-serif;
-  font-size: 0.95rem;
+.auth-hands {
+  display: flex;
+  gap: 8px;
+  font-size: 26px;
+}
+.auth-hands span {
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.auth-hands span:nth-child(3) { border-color: var(--accent); }
+
+.auth-hero .wordmark { font-size: 32px; }
+.auth-tagline { color: var(--text-2); font-size: 15px; }
+
+.auth-card {
   width: 100%;
+  max-width: 380px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
 }
 
-.auth-input:focus {
-  outline: none;
-  border-color: #00D9C0;
-}
+.auth-title { font-size: 22px; }
 
-.auth-error {
-  background: rgba(255, 84, 112, 0.15);
-  color: #FF5470;
-  padding: 8px 14px;
-  border-radius: 10px;
-  font-size: 0.85rem;
-  text-align: center;
-}
+.auth-form { display: flex; flex-direction: column; gap: 14px; }
 
 .auth-switch {
   text-align: center;
-  font-family: 'Inter', sans-serif;
-  font-size: 0.85rem;
-  color: #B0B0C0;
+  font-size: 14px;
+  color: var(--text-2);
 }
-
-.auth-switch a {
-  color: #00D9C0;
-  text-decoration: none;
-  font-weight: 600;
-}
-
-.auth-switch a:hover {
-  text-decoration: underline;
-}
+.auth-switch a { color: var(--accent); text-decoration: none; font-weight: 600; }
+.auth-switch a:hover { text-decoration: underline; }

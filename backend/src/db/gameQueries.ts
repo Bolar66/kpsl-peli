@@ -1,12 +1,38 @@
 import { pool } from './pool';
 import { generateRoomCode } from '../utils/roomCode';
 
+// Huoneeseen lisätyillä boteilla on negatiivinen id eikä käyttäjäriviä — niitä ei tallenneta
+const isRealUser = (userId: number) => userId > 0;
+
 export async function getGameIdByRoomCode(roomCode: string): Promise<number | null> {
   const result = await pool.query(
     'SELECT id FROM games WHERE room_code = $1 ORDER BY id DESC LIMIT 1',
     [roomCode]
   );
   return result.rows[0]?.id ?? null;
+}
+
+export async function getLatestGameByRoomCode(
+  roomCode: string
+): Promise<{ id: number; status: string; hostUserId: number } | null> {
+  const result = await pool.query(
+    'SELECT id, status, host_user_id FROM games WHERE room_code = $1 ORDER BY id DESC LIMIT 1',
+    [roomCode]
+  );
+  const row = result.rows[0];
+  return row ? { id: row.id, status: row.status, hostUserId: row.host_user_id } : null;
+}
+
+// Merkitsee pelin alkaneeksi ja varmistaa että kaikilla pelaajilla on game_players-rivi
+// (myös niillä jotka liittyivät huoneeseen edellisen pelin jälkeen)
+export async function markGameStarted(gameId: number, playerUserIds: number[]): Promise<void> {
+  await pool.query('UPDATE games SET status = $1 WHERE id = $2', ['playing', gameId]);
+  for (const userId of playerUserIds.filter(isRealUser)) {
+    await pool.query(
+      'INSERT INTO game_players (game_id, user_id) VALUES ($1, $2) ON CONFLICT (game_id, user_id) DO NOTHING',
+      [gameId, userId]
+    );
+  }
 }
 
 export async function saveRound(
@@ -21,7 +47,7 @@ export async function saveRound(
   const roundId = roundResult.rows[0].id;
 
   for (const pick of picks) {
-    if (pick.symbol === null) continue;
+    if (pick.symbol === null || !isRealUser(pick.userId)) continue;
     await pool.query(
       'INSERT INTO round_picks (round_id, user_id, symbol, is_bot_pick) VALUES ($1, $2, $3, $4)',
       [roundId, pick.userId, pick.symbol, pick.isBot]
@@ -40,11 +66,14 @@ export async function finalizeGame(
   gameId: number,
   mode: string,
   playerWins: { userId: number; wins: number }[],
-  symbolStats: Record<number, Record<string, SymbolStat>>
+  symbolStats: Record<number, Record<string, SymbolStat>>,
+  winnerUserId: number | null
 ): Promise<void> {
-  await pool.query('UPDATE games SET status = $1 WHERE id = $2', ['finished', gameId]);
+  await pool.query('UPDATE games SET status = $1, winner_user_id = $2 WHERE id = $3', [
+    'finished', winnerUserId !== null && isRealUser(winnerUserId) ? winnerUserId : null, gameId,
+  ]);
 
-  for (const { userId, wins } of playerWins) {
+  for (const { userId, wins } of playerWins.filter(p => isRealUser(p.userId))) {
     await pool.query(
       'UPDATE game_players SET wins = $1 WHERE game_id = $2 AND user_id = $3',
       [wins, gameId, userId]
@@ -53,6 +82,7 @@ export async function finalizeGame(
 
   for (const userIdStr of Object.keys(symbolStats)) {
     const userId = parseInt(userIdStr);
+    if (!isRealUser(userId)) continue;
     for (const symbol of Object.keys(symbolStats[userId]!)) {
       const s = symbolStats[userId]![symbol]!;
       await pool.query(
@@ -91,9 +121,15 @@ export async function createGameRow(
   );
   const gameId = result.rows[0].id;
 
-  for (const userId of playerUserIds) {
+  for (const userId of playerUserIds.filter(isRealUser)) {
     await pool.query('INSERT INTO game_players (game_id, user_id) VALUES ($1, $2)', [gameId, userId]);
   }
 
   return gameId;
+}
+// Haetaan pelaajan profiilikuva huoneeseen liityttäessä
+export async function getUserAvatar(userId: number): Promise<{ avatarEmoji: string | null; avatarColor: string | null; avatarImage: string | null }> {
+  const result = await pool.query('SELECT avatar_emoji, avatar_color, avatar_image FROM users WHERE id = $1', [userId]);
+  const row = result.rows[0];
+  return { avatarEmoji: row?.avatar_emoji ?? null, avatarColor: row?.avatar_color ?? null, avatarImage: row?.avatar_image ?? null };
 }

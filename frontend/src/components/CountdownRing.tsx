@@ -1,39 +1,48 @@
+import { motion, AnimatePresence } from 'framer-motion';
+
 interface CountdownRingProps {
   countdown: number;
   duration: number;
 }
 
-function getColor(fraction: number): string {
-  if (fraction <= 0.2) return '#FF5470';
-  if (fraction <= 0.4) return '#FFC857';
-  return '#00D9C0';
-}
+const SIZE = 88;
+const STROKE = 3;
+const RADIUS = (SIZE - STROKE) / 2 - 2;
 
 export default function CountdownRing({ countdown, duration }: CountdownRingProps) {
-  const fraction = Math.max(countdown / duration, 0);
-  const radius = 42;
-  const circumference = 2 * Math.PI * radius;
-  const offset = circumference * (1 - fraction);
-  const color = getColor(fraction);
+  const fraction = Math.max(Math.min(countdown / duration, 1), 0);
+  const circumference = 2 * Math.PI * RADIUS;
+  const urgent = countdown <= 2;
+  const color = urgent ? 'var(--danger)' : 'var(--accent)';
 
   return (
-    <div className="countdown-ring-wrapper">
-      <svg width="96" height="96" viewBox="0 0 96 96">
+    <div className={`countdown ${urgent ? 'urgent' : ''}`}>
+      <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`} aria-hidden="true">
+        <circle cx={SIZE / 2} cy={SIZE / 2} r={RADIUS} fill="none" stroke="var(--border)" strokeWidth={STROKE} />
         <circle
-          cx="48" cy="48" r={radius}
-          fill="none" stroke="#2D2D44" strokeWidth="6"
-        />
-        <circle
-          cx="48" cy="48" r={radius}
-          fill="none" stroke={color} strokeWidth="6"
+          cx={SIZE / 2} cy={SIZE / 2} r={RADIUS}
+          fill="none" stroke={color} strokeWidth={STROKE}
           strokeLinecap="round"
           strokeDasharray={circumference}
-          strokeDashoffset={offset}
-          transform="rotate(-90 48 48)"
+          strokeDashoffset={circumference * (1 - fraction)}
+          transform={`rotate(-90 ${SIZE / 2} ${SIZE / 2})`}
           style={{ transition: 'stroke-dashoffset 1s linear, stroke 0.3s ease' }}
         />
       </svg>
-      <div className="countdown-ring-number" style={{ color }}>{countdown}</div>
+      <AnimatePresence mode="popLayout" initial={false}>
+        <motion.span
+          key={countdown}
+          className="countdown-num"
+          style={{ color }}
+          initial={{ opacity: 0, scale: 1.4 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.7 }}
+          transition={{ duration: 0.25, ease: [0.2, 0.8, 0.2, 1] }}
+          aria-live="polite"
+        >
+          {countdown}
+        </motion.span>
+      </AnimatePresence>
     </div>
   );
 }

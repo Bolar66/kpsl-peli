@@ -1,26 +1,31 @@
-import { useEffect, useRef, useState } from 'react';
-import { io, Socket } from 'socket.io-client';
+import { useEffect, useMemo, useState } from 'react';
+import { io } from 'socket.io-client';
+import { SERVER_URL } from '../config';
 
 export function useSocket(token: string | null) {
-  const socketRef = useRef<Socket | null>(null);
   const [connected, setConnected] = useState(false);
 
+  // Socket luodaan ilman yhteyttä; yhdistäminen ja katkaisu tehdään efektissä
+  const socket = useMemo(
+    () => (token ? io(SERVER_URL || undefined, { auth: { token }, autoConnect: false }) : null),
+    [token]
+  );
+
   useEffect(() => {
-    if (!token) return;
+    if (!socket) return;
 
-    const socket = io('http://localhost:3001', {
-      auth: { token },
-    });
-
-    socket.on('connect', () => setConnected(true));
-    socket.on('disconnect', () => setConnected(false));
-
-    socketRef.current = socket;
+    const onConnect = () => setConnected(true);
+    const onDisconnect = () => setConnected(false);
+    socket.on('connect', onConnect);
+    socket.on('disconnect', onDisconnect);
+    socket.connect();
 
     return () => {
       socket.disconnect();
+      socket.off('connect', onConnect);
+      socket.off('disconnect', onDisconnect);
     };
-  }, [token]);
+  }, [socket]);
 
-  return { socket: socketRef.current, connected };
+  return { socket, connected };
 }

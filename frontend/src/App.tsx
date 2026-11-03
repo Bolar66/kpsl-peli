@@ -1,13 +1,16 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Register from './pages/Register';
 import Login from './pages/Login';
 import Lobby from './pages/Lobby';
 import Room from './pages/Room';
+import Profile from './pages/Profile';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { token } = useAuth();
-  return token ? <>{children}</> : <Navigate to="/login" />;
+  const location = useLocation();
+  // Muistetaan minne oltiin menossa (esim. kaverin jakama huonelinkki)
+  return token ? <>{children}</> : <Navigate to="/login" replace state={{ from: location.pathname }} />;
 }
 
 function AppRoutes() {
@@ -28,6 +31,14 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <Room />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/profile"
+        element={
+          <ProtectedRoute>
+            <Profile />
           </ProtectedRoute>
         }
       />

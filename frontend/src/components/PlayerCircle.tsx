@@ -1,15 +1,16 @@
+import type { ReactNode } from 'react';
 import PlayerHand from './PlayerHand';
 import CountdownRing from './CountdownRing';
+import Avatar, { type AvatarData } from './Avatar';
 
-interface CirclePlayer {
-  userId: number;
-  username: string;
+interface CirclePlayer extends AvatarData {
   hearts: number;
-  wins: number;
+  isMe: boolean;
   isBot: boolean;
   isConnected: boolean;
   hasPicked: boolean;
   isDnf: boolean;
+  isWinner: boolean;
   revealedSymbol: string | null;
 }
 
@@ -19,67 +20,77 @@ interface PlayerCircleProps {
   duration: number;
   paused: boolean;
   isRevealPhase: boolean;
+  revealContent?: ReactNode;
 }
 
-const POSITIONS: Record<number, number[]> = {
-  1: [0],
-  2: [0, 180],
-  3: [0, 120, 240],
-  4: [0, 90, 180, 270],
-};
+const MAX_HEARTS = 3;
 
-function getCoordsForAngle(angle: number, radius: number) {
-  const rad = (angle - 90) * (Math.PI / 180);
-  return {
-    x: Math.cos(rad) * radius,
-    y: Math.sin(rad) * radius,
-  };
+// Oma pelaaja on aina alhaalla, muut jakautuvat tasaisesti ympyrälle
+function angleFor(index: number, count: number) {
+  return 180 + (360 / count) * index;
 }
 
-export default function PlayerCircle({ players, countdown, duration, paused, isRevealPhase }: PlayerCircleProps) {
-  const positions = POSITIONS[players.length] || POSITIONS[4]!;
-  const radius = 128;
+export default function PlayerCircle({ players, countdown, duration, paused, isRevealPhase, revealContent }: PlayerCircleProps) {
+  const meIndex = Math.max(players.findIndex(p => p.isMe), 0);
+  const ordered = [...players.slice(meIndex), ...players.slice(0, meIndex)];
 
   return (
-    <div className="player-circle">
-      <div className="player-circle-center">
-        {countdown !== null && !paused && (
+    <div className="arena">
+      <div className="arena-ring" aria-hidden="true" />
+      <div className="arena-center">
+        {paused ? (
+          <div className="countdown-paused" aria-label="Tauolla">❙❙</div>
+        ) : countdown !== null ? (
           <CountdownRing countdown={countdown} duration={duration} />
+        ) : isRevealPhase ? revealContent : (
+          <div className="countdown-idle" />
         )}
-        {paused && <div className="countdown-paused">⏸</div>}
       </div>
 
-      {players.map((player, i) => {
-        const angle = positions[i] ?? 0;
-        const { x, y } = getCoordsForAngle(angle, radius);
-        const isAboveCenter = y < -5;
+      {ordered.map((player, i) => {
+        const angle = angleFor(i, ordered.length);
+        const rad = (angle - 90) * (Math.PI / 180);
+        // Sijainti prosentteina, jotta ympyrä skaalautuu näytön koon mukaan
+        const x = 50 + Math.cos(rad) * 38;
+        const y = 50 + Math.sin(rad) * 38;
+        const isTop = y < 45;
+        const status = !player.isConnected && !player.isBot ? 'Yhdistää…' : player.isBot ? 'Botti' : null;
 
         return (
           <div
             key={player.userId}
-            className={`player-avatar ${player.hasPicked ? 'picked' : ''} ${player.isDnf ? 'dnf' : ''} ${isAboveCenter ? 'reversed' : ''}`}
-            style={{ transform: `translate(${x}px, ${y}px) translate(-50%, -50%)` }}
+            className={[
+              'seat',
+              isTop ? 'top' : '',
+              player.hasPicked ? 'picked' : '',
+              player.isDnf ? 'dnf' : '',
+              player.isMe ? 'me' : '',
+              player.isWinner ? 'winner' : '',
+            ].join(' ')}
+            style={{ left: `${x}%`, top: `${y}%` }}
           >
             <PlayerHand
               hasPicked={player.hasPicked}
               revealedSymbol={player.revealedSymbol}
               isRevealPhase={isRevealPhase}
               isDnf={player.isDnf}
+              isWinner={player.isWinner}
             />
-            <div className="player-avatar-circle">
-              {player.username.charAt(0).toUpperCase()}
-            </div>
-            <div className="player-info-block">
-              <div className="player-name">
-                {player.username}
-                {player.isBot && ' 🤖'}
-                {!player.isConnected && !player.isBot && ' ⏳'}
+            <div className="seat-info">
+              <div className="seat-avatar">
+                <Avatar player={player} size={40} />
               </div>
-              <div className="player-hearts">
-                {'❤️'.repeat(player.hearts)}
-                {'🖤'.repeat(3 - player.hearts)}
+              <div className="seat-name">{player.isMe ? 'Sinä' : player.username}</div>
+              {status && <div className="seat-status">{status}</div>}
+              <div
+                className="lives"
+                aria-label={`${player.hearts} sydäntä jäljellä`}
+                title={`${player.hearts}/${MAX_HEARTS} sydäntä — myöhästyminen vie yhden`}
+              >
+                {Array.from({ length: MAX_HEARTS }).map((_, h) => (
+                  <span key={h} className={h < player.hearts ? 'life' : 'life lost'} />
+                ))}
               </div>
-              <div className="player-wins">{player.wins} voittoa</div>
             </div>
           </div>
         );

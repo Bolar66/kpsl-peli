@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import { pool } from '../db/pool';
 import { authenticateToken, AuthRequest } from '../middleware/auth';
 import { generateRoomCode } from '../utils/roomCode';
+import { getLatestGameByRoomCode } from '../db/gameQueries';
 
 const router = Router();
 
@@ -47,37 +48,29 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
 
 // Liity huoneeseen
 router.post('/:roomCode/join', authenticateToken, async (req: AuthRequest, res: Response) => {
-  const { roomCode } = req.params;
+  const roomCode = String(req.params.roomCode).toUpperCase();
 
   try {
-    const gameResult = await pool.query(
-      'SELECT id, status FROM games WHERE room_code = $1',
-      [roomCode.toUpperCase()]
-    );
-    if (gameResult.rows.length === 0) {
+    const game = await getLatestGameByRoomCode(roomCode);
+    if (!game) {
       return res.status(404).json({ error: 'Huonetta ei löytynyt' });
     }
-    const game = gameResult.rows[0];
 
-    if (game.status !== 'lobby') {
-      return res.status(400).json({ error: 'Peli on jo alkanut tai päättynyt' });
+    // Käynnissä olevan huoneen tila on palvelimen muistissa (index.ts); se ratkaisee voiko liittyä.
+    // Jos huone ei ole muistissa, päätetään tietokannan tilan perusteella.
+    const getRoomJoinError: (code: string, userId: number) => string | null | undefined = req.app.locals.getRoomJoinError;
+    const joinError = getRoomJoinError(roomCode, req.userId!);
+    if (joinError) {
+      return res.status(400).json({ error: joinError });
+    }
+    if (joinError === undefined && game.status !== 'lobby') {
+      return res.status(400).json({ error: 'Tämä peli on jo päättynyt' });
     }
 
-    const playerCount = await pool.query('SELECT COUNT(*) FROM game_players WHERE game_id = $1', [game.id]);
-    if (parseInt(playerCount.rows[0].count) >= 4) {
-      return res.status(400).json({ error: 'Huone on täynnä' });
-    }
-
-    const existing = await pool.query(
-      'SELECT id FROM game_players WHERE game_id = $1 AND user_id = $2',
+    await pool.query(
+      'INSERT INTO game_players (game_id, user_id) VALUES ($1, $2) ON CONFLICT (game_id, user_id) DO NOTHING',
       [game.id, req.userId]
     );
-    if (existing.rows.length === 0) {
-      await pool.query(
-        'INSERT INTO game_players (game_id, user_id) VALUES ($1, $2)',
-        [game.id, req.userId]
-      );
-    }
 
     res.json({ gameId: game.id, roomCode });
   } catch (err) {

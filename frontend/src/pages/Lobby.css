@@ -1,74 +1,88 @@
-.lobby-page-outer {
-  height: 100dvh;
-  width: 100dvw;
-  overflow: hidden;
+.lobby-page {
+  min-height: 100dvh;
   display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0 16px 32px;
+}
+
+.topbar {
+  width: 100%;
+  max-width: 440px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 0;
+}
+
+.user-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 3px 3px 3px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 500;
+  transition: border-color 0.15s ease;
+}
+.user-chip:hover { border-color: var(--border-strong); }
+.user-chip-name { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.lobby-main {
+  width: 100%;
+  max-width: 440px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-top: 12px;
+}
+
+.lobby-hero { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+.lobby-hero h1 { font-size: 32px; letter-spacing: -0.03em; }
+
+.lobby-card { display: flex; flex-direction: column; gap: 16px; }
+.lobby-card-title { font-size: 20px; margin-top: 4px; }
+.lobby-card-text { font-size: 14px; margin-top: 4px; }
+
+.join-form { display: flex; gap: 8px; }
+
+.code-input {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: 0.35em;
+  text-transform: uppercase;
+  padding-left: calc(14px + 0.35em);
+}
+
+.how-to {
+  list-style: none;
+  padding: 8px 4px 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 14px;
+  color: var(--text-2);
+}
+.how-to li { display: flex; align-items: center; gap: 12px; }
+.how-to span {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 1px solid var(--border-strong);
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-}
-
-.lobby-page {
-  width: 360px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 20px;
-  gap: 18px;
-  transform-origin: center center;
-}
-
-.lobby-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  width: 100%;
-}
-
-.lobby-username {
-  font-family: 'Space Grotesk', sans-serif;
-  font-size: 1.1rem;
-}
-
-.lobby-card {
-  background: #2D2D44;
-  border-radius: 20px;
-  padding: 22px;
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.lobby-card-title {
-  font-family: 'Space Grotesk', sans-serif;
-  font-size: 1.1rem;
-  margin: 0;
-}
-
-.lobby-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-family: 'Inter', sans-serif;
-  font-size: 0.9rem;
-}
-
-.lobby-row select,
-.lobby-row input,
-.lobby-join-input {
-  background: #1A1A2E;
-  color: #F2F2F2;
-  border: 1px solid #4A4A5E;
-  border-radius: 8px;
-  padding: 8px 12px;
-  font-family: 'Inter', sans-serif;
-}
-
-.lobby-join-input {
-  width: 100%;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  text-align: center;
-  font-family: 'Space Grotesk', sans-serif;
-  font-size: 1rem;
+  font-family: var(--font-display);
+  font-size: 12px;
+  color: var(--text);
 }

@@ -1,41 +1,39 @@
+import { motion } from 'framer-motion';
+import { SYMBOL_INFO, SYMBOLS_BY_MODE, type GameMode } from '../constants/symbols';
+
 interface PickButtonsProps {
-  mode: 'classic' | 'extended';
+  mode: GameMode;
   onPick: (symbol: string) => void;
   disabled: boolean;
-  hasPicked: boolean;
+  pickedSymbol: string | null;
 }
 
-const SYMBOL_INFO: Record<string, { emoji: string; label: string; color: string }> = {
-  rock: { emoji: '✊', label: 'Kivi', color: '#FF5470' },
-  paper: { emoji: '✋', label: 'Paperi', color: '#00D9C0' },
-  scissors: { emoji: '✌️', label: 'Sakset', color: '#FFC857' },
-  lizard: { emoji: '🦎', label: 'Lisko', color: '#9D6FFF' },
-  spock: { emoji: '🖖', label: 'Spock', color: '#4FA8FF' },
-};
-
-export default function PickButtons({ mode, onPick, disabled, hasPicked }: PickButtonsProps) {
-  const symbols = mode === 'extended'
-    ? ['rock', 'paper', 'scissors', 'lizard', 'spock']
-    : ['rock', 'paper', 'scissors'];
+export default function PickButtons({ mode, onPick, disabled, pickedSymbol }: PickButtonsProps) {
+  const symbols = SYMBOLS_BY_MODE[mode];
 
   return (
-    <div className="pick-buttons">
-      {symbols.map(symbol => {
+    <div className={`picks picks-${symbols.length}`} role="group" aria-label="Valitse käsi">
+      {symbols.map((symbol, i) => {
         const info = SYMBOL_INFO[symbol]!;
+        const isPicked = pickedSymbol === symbol;
+        const state = isPicked ? 'picked' : pickedSymbol ? 'dimmed' : disabled ? 'inactive' : '';
         return (
-          <button
+          <motion.button
             key={symbol}
-            className={`pick-button ${disabled ? 'inactive' : 'active'}`}
-            style={disabled ? {} : { borderColor: info.color, color: info.color }}
+            className={`pick ${state}`}
             onClick={() => onPick(symbol)}
             disabled={disabled}
+            aria-pressed={isPicked}
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: i * 0.04, duration: 0.25, ease: [0.2, 0.8, 0.2, 1] }}
+            whileTap={disabled ? undefined : { scale: 0.92 }}
           >
             <span className="pick-emoji">{info.emoji}</span>
             <span className="pick-label">{info.label}</span>
-          </button>
+          </motion.button>
         );
       })}
-      {hasPicked && !disabled && <p className="pick-status">Valinta lähetetty, odotetaan muita...</p>}
     </div>
   );
 }

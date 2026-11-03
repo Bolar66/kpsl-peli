@@ -2,15 +2,16 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../hooks/useSocket';
-import { useAutoScale } from '../hooks/useAutoScale';
 import PlayerCircle from '../components/PlayerCircle';
-import Leaderboard from '../components/Leaderboard';
+import Scoreboard from '../components/Scoreboard';
 import PickButtons from '../components/PickButtons';
 import GameOverModal from '../components/GameOverModal';
-import '../components/PlayerCircle.css';
-import '../components/PlayerHand.css';
-import '../components/Leaderboard.css';
-import '../components/PickButtons.css';
+import ReadyCheckModal from '../components/ReadyCheckModal';
+import PauseMenu from '../components/PauseMenu';
+import RoundWinnerBanner from '../components/RoundWinnerBanner';
+import RoomLobby, { type LobbySettings } from '../components/RoomLobby';
+import { explainWin, MODE_LABEL, type GameMode } from '../constants/symbols';
+import { haptic } from '../constants/players';
 import './Room.css';
 
 interface Player {
@@ -20,6 +21,9 @@ interface Player {
   isHost: boolean;
   isConnected: boolean;
   isBot: boolean;
+  avatarEmoji?: string | null;
+  avatarColor?: string | null;
+  avatarImage?: string | null;
 }
 
 interface RevealResult {
@@ -38,24 +42,32 @@ interface HeartsEntry {
   hearts: number;
 }
 
-const SYMBOL_LABEL: Record<string, string> = {
-  rock: 'Kivi', paper: 'Paperi', scissors: 'Sakset', lizard: 'Lisko', spock: 'Spock',
+type ReadyReason = 'game-start' | 'round-gap' | 'manual-pause';
+
+const DEFAULT_SETTINGS: LobbySettings = {
+  mode: 'classic',
+  winsRequired: 3,
+  speed: 'fast',
+  firstRoundSeconds: 15,
+  laterRoundSeconds: 8,
+  roundGap: 5,
 };
 
 export default function Room() {
   const { roomCode } = useParams();
-  const { token, user } = useAuth();
+  const { token, user, logout } = useAuth();
   const { socket, connected } = useSocket(token);
   const navigate = useNavigate();
-  const { containerRef, scale } = useAutoScale<HTMLDivElement>(400, 760);
 
   const [players, setPlayers] = useState<Player[]>([]);
-  const [mode, setMode] = useState<'classic' | 'extended'>('classic');
+  const [settings, setSettings] = useState<LobbySettings>(DEFAULT_SETTINGS);
+  const [mode, setMode] = useState<GameMode>('classic');
   const [winsRequired, setWinsRequired] = useState(3);
   const [roundNumber, setRoundNumber] = useState<number | null>(null);
   const [duration, setDuration] = useState(10);
   const [countdown, setCountdown] = useState<number | null>(null);
   const [hasPicked, setHasPicked] = useState(false);
+  const [pickedSymbol, setPickedSymbol] = useState<string | null>(null);
   const [pickCount, setPickCount] = useState<{ picked: number; total: number; pickedNames: string[] } | null>(null);
   const [revealResults, setRevealResults] = useState<RevealResult[] | null>(null);
   const [winners, setWinners] = useState<string[]>([]);
@@ -64,28 +76,91 @@ export default function Room() {
   const [hearts, setHearts] = useState<HeartsEntry[]>([]);
   const [dnfPlayers, setDnfPlayers] = useState<string[]>([]);
   const [gameOverWinner, setGameOverWinner] = useState<string | null>(null);
+  const [gameOverReason, setGameOverReason] = useState<'forfeit' | null>(null);
+  const [finalWins, setFinalWins] = useState<WinsEntry[] | null>(null);
+  const [joinRejected, setJoinRejected] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [paused, setPaused] = useState(false);
   const [waitingFor, setWaitingFor] = useState<string[]>([]);
   const [retryMessage, setRetryMessage] = useState('');
 
+  const [readyCheckActive, setReadyCheckActive] = useState(false);
+  const [readyReason, setReadyReason] = useState<ReadyReason | null>(null);
+  const [pausedByName, setPausedByName] = useState<string | null>(null);
+  const [readyNames, setReadyNames] = useState<string[]>([]);
+  const [readyTotal, setReadyTotal] = useState(0);
+
+  const [showWinnerBanner, setShowWinnerBanner] = useState(false);
+
+  const myName = user?.username || '';
   const me = players.find(p => p.userId === user?.id);
   const isHost = me?.isHost || false;
-  const iAmDnf = dnfPlayers.includes(user?.username || '');
+  const iAmDnf = dnfPlayers.includes(myName);
+  const iAmReady = readyNames.includes(myName);
 
   useEffect(() => {
     if (!socket || !roomCode) return;
 
-    socket.emit('room:join', { roomCode });
+    // Liitytään huoneeseen aina kun yhteys muodostuu — myös katkenneen yhteyden palatessa
+    function joinRoom() {
+      socket!.emit('room:join', { roomCode });
+    }
+
+    socket.on('room:state', (state: {
+      mode: GameMode;
+      winsRequired: number;
+      roundNumber: number | null;
+      roundActive: boolean;
+      duration: number | null;
+      remainingSeconds: number | null;
+      myPick: string | null;
+      pickCount: { picked: number; total: number; pickedNames: string[] } | null;
+      reveal: { results: RevealResult[]; winners: string[]; isDraw: boolean } | null;
+      wins: WinsEntry[];
+      hearts: HeartsEntry[];
+      dnf: string[];
+      ready: { reason: ReadyReason; readyNames: string[]; total: number; pausedByName: string | null } | null;
+      gameOverWinner: string | null;
+      settings: LobbySettings | null;
+    }) => {
+      setMode(state.mode);
+      setWinsRequired(state.winsRequired);
+      if (state.settings) setSettings(state.settings);
+      setRoundNumber(state.roundNumber);
+      if (state.duration !== null) setDuration(state.duration);
+      setCountdown(state.remainingSeconds);
+      setHasPicked(state.myPick !== null);
+      setPickedSymbol(state.myPick);
+      setPickCount(state.pickCount);
+      setRevealResults(state.reveal?.results ?? null);
+      setWinners(state.reveal?.winners ?? []);
+      setIsDraw(state.reveal?.isDraw ?? false);
+      setWins(state.roundNumber !== null || state.gameOverWinner ? state.wins : []);
+      setHearts(state.hearts);
+      setDnfPlayers(state.dnf);
+      setReadyCheckActive(state.ready !== null);
+      setReadyReason(state.ready?.reason ?? null);
+      setReadyNames(state.ready?.readyNames ?? []);
+      setReadyTotal(state.ready?.total ?? 0);
+      setPausedByName(state.ready?.pausedByName ?? null);
+      setGameOverWinner(state.gameOverWinner);
+      setGameOverReason(null);
+      setJoinRejected(null);
+      setRetryMessage('');
+      setShowWinnerBanner(false);
+    });
 
     socket.on('room:players', ({ players }: { players: Player[] }) => setPlayers(players));
 
+    socket.on('settings:update', (s: LobbySettings) => setSettings(s));
+
     socket.on('round:start', ({ roundNumber, duration: roundDuration, mode, dnf, hearts }: {
-      roundNumber: number; duration: number; mode: 'classic' | 'extended'; dnf: string[]; hearts: HeartsEntry[];
+      roundNumber: number; duration: number; mode: GameMode; dnf: string[]; hearts: HeartsEntry[];
     }) => {
       setRoundNumber(roundNumber);
       setMode(mode);
       setHasPicked(false);
+      setPickedSymbol(null);
       setPickCount(null);
       setRevealResults(null);
       setGameOverWinner(null);
@@ -93,14 +168,32 @@ export default function Room() {
       setCountdown(roundDuration);
       setDnfPlayers(dnf || []);
       setHearts(hearts || []);
-      setRetryMessage('');
+      setReadyCheckActive(false);
+      setShowWinnerBanner(false);
     });
 
     socket.on('round:retry', ({ reason }: { reason: string }) => {
-      setRetryMessage(reason === 'draw' ? 'Tasapeli — kierros uusitaan!' : 'Joku myöhästyi — kierros uusitaan!');
+      if (reason === 'draw') setRetryMessage('Tasapeli — uusi yritys!');
     });
 
-    socket.on('pick:count', (data: { picked: number; total: number; pickedNames: string[] }) => setPickCount(data));
+    socket.on('round:missed', ({ names, retry }: { names: string[]; retry: boolean }) => {
+      const iMissed = names.includes(user?.username ?? '');
+      const others = names.filter(n => n !== user?.username);
+      const who = iMissed ? (others.length ? `Sinä ja ${others.join(', ')}` : 'Et') : others.join(', ');
+      const verb = iMissed && others.length === 0 ? 'ehtinyt valita' : 'ei ehtinyt valita';
+      setRetryMessage(`${who} ${verb} — −1 ❤${retry ? ', kierros uusitaan' : ', käsi arvottiin'}`);
+      if (iMissed) haptic([60, 40, 60]);
+    });
+
+    socket.on('pick:count', (data: { picked: number; total: number; pickedNames: string[] }) => {
+      setPickCount(data);
+      setRetryMessage('');
+    });
+
+    socket.on('round:speedup', ({ remainingSeconds, newDuration }: { remainingSeconds: number; newDuration: number }) => {
+      setDuration(newDuration);
+      setCountdown(remainingSeconds);
+    });
 
     socket.on('round:reveal', (data: {
       roundNumber: number; results: RevealResult[]; winners: string[]; isDraw: boolean; wins: WinsEntry[]; hearts: HeartsEntry[];
@@ -112,11 +205,27 @@ export default function Room() {
       setWins(data.wins);
       setHearts(data.hearts || []);
       setRetryMessage('');
+      setShowWinnerBanner(true);
+      haptic(data.winners.includes(user?.username ?? '') && !data.isDraw ? [20, 40, 70] : 35);
     });
 
-    socket.on('game:over', ({ winner }: { winner: string }) => setGameOverWinner(winner));
+    socket.on('room:joinRejected', ({ message }: { message: string }) => setJoinRejected(message));
 
-    socket.on('game:reset', ({ mode, winsRequired }: { mode: 'classic' | 'extended'; winsRequired: number }) => {
+    socket.on('connect_error', (err: Error) => {
+      // Vanhentunut tai virheellinen kirjautuminen: kirjaudutaan ulos, jolloin päädytään kirjautumissivulle
+      if (err.message === 'Virheellinen token' || err.message === 'Token puuttuu') logout();
+    });
+
+    socket.on('game:over', ({ winner, reason, finalWins }: { winner: string; reason?: 'forfeit'; finalWins: WinsEntry[] }) => {
+      setGameOverWinner(winner);
+      setFinalWins(finalWins);
+      setGameOverReason(reason ?? null);
+      setReadyCheckActive(false);
+      setCountdown(null);
+      if (winner === user?.username) haptic([60, 50, 60, 50, 140]);
+    });
+
+    socket.on('game:reset', ({ mode, winsRequired }: { mode: GameMode; winsRequired: number }) => {
       setMode(mode);
       setWinsRequired(winsRequired);
       setRoundNumber(null);
@@ -134,20 +243,53 @@ export default function Room() {
       setWaitingFor(waitingFor);
     });
 
-    socket.on('error:message', ({ message }: { message: string }) => setError(message));
+    socket.on('ready:check', ({ reason, readyNames, total, mode: readyMode, winsRequired: readyWins }: {
+      reason: ReadyReason; readyNames: string[]; total: number; mode: GameMode; winsRequired: number;
+    }) => {
+      setReadyCheckActive(true);
+      setReadyReason(reason);
+      setReadyNames(readyNames);
+      setReadyTotal(total);
+      if (readyMode) setMode(readyMode);
+      if (readyWins) setWinsRequired(readyWins);
+      setGameOverWinner(null);
+      if (reason === 'game-start') {
+        setRoundNumber(null);
+        setWins([]);
+        setHearts([]);
+        setRevealResults(null);
+      }
+    });
+
+    socket.on('ready:status', ({ readyNames, total }: { readyNames: string[]; total: number }) => {
+      setReadyNames(readyNames);
+      setReadyTotal(total);
+    });
+
+    socket.on('ready:allReady', () => {
+      setReadyCheckActive(false);
+      setPausedByName(null);
+    });
+
+    socket.on('game:pausedBy', ({ username }: { username: string }) => setPausedByName(username));
+
+    socket.on('error:message', ({ message }: { message: string }) => {
+      setError(message);
+      setTimeout(() => setError(''), 4000);
+    });
+
+    socket.on('connect', joinRoom);
+    if (socket.connected) joinRoom();
 
     return () => {
-      socket.off('room:players');
-      socket.off('round:start');
-      socket.off('round:retry');
-      socket.off('pick:count');
-      socket.off('round:reveal');
-      socket.off('game:over');
-      socket.off('game:reset');
-      socket.off('game:pause');
-      socket.off('error:message');
+      socket.off('connect', joinRoom);
+      [
+        'room:state', 'room:players', 'settings:update', 'round:start', 'round:retry', 'pick:count', 'round:speedup',
+        'round:reveal', 'room:joinRejected', 'connect_error', 'game:over', 'game:reset', 'game:pause', 'ready:check',
+        'ready:status', 'ready:allReady', 'game:pausedBy', 'round:missed', 'error:message',
+      ].forEach(ev => socket.off(ev));
     };
-  }, [socket, roomCode]);
+  }, [socket, roomCode, logout, user?.username]);
 
   useEffect(() => {
     if (paused) return;
@@ -156,12 +298,20 @@ export default function Room() {
     return () => clearTimeout(timer);
   }, [countdown, paused]);
 
+  function handleSettingsChange(next: LobbySettings) {
+    setSettings(next);
+    socket?.emit('settings:update', { roomCode, settings: next });
+  }
   function handleStartGame() {
-    socket?.emit('game:start', { roomCode, winsRequired, mode });
+    setMode(settings.mode);
+    setWinsRequired(settings.winsRequired);
+    socket?.emit('game:start', { roomCode, ...settings });
   }
   function handlePick(symbol: string) {
     if (hasPicked) return;
     setHasPicked(true);
+    setPickedSymbol(symbol);
+    haptic(15);
     socket?.emit('pick:submit', { roomCode, symbol });
   }
   function handleReplay() {
@@ -174,125 +324,187 @@ export default function Room() {
     socket?.emit('room:leave', { roomCode });
     navigate('/lobby');
   }
+  function handleReadySubmit() {
+    socket?.emit('ready:submit', { roomCode });
+  }
+  function handlePauseReadyToggle() {
+    socket?.emit(iAmReady ? 'ready:cancel' : 'ready:submit', { roomCode });
+  }
+  function handlePauseToggle() {
+    socket?.emit('game:pauseToggle', { roomCode });
+  }
+
+  if (joinRejected) {
+    return (
+      <div className="room-page">
+        <div className="room-center">
+          <div className="card rejected">
+            <div className="rejected-icon" aria-hidden="true">🚪</div>
+            <h1>Huoneeseen {roomCode} ei pääse</h1>
+            <p className="muted">{joinRejected}</p>
+            <button className="btn btn-primary btn-block" onClick={() => navigate('/lobby')}>Takaisin etusivulle</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const inGame = roundNumber !== null || !!gameOverWinner || readyCheckActive;
+  const winnerSet = revealResults && !isDraw ? new Set(winners) : new Set<string>();
 
   const circlePlayers = players.map(p => ({
     userId: p.userId,
     username: p.username,
+    avatarEmoji: p.avatarEmoji,
+    avatarColor: p.avatarColor,
+    avatarImage: p.avatarImage,
     hearts: hearts.find(h => h.username === p.username)?.hearts ?? 3,
-    wins: wins.find(w => w.username === p.username)?.wins ?? 0,
+    isMe: p.userId === user?.id,
     isBot: p.isBot,
     isConnected: p.isConnected,
     hasPicked: revealResults === null && (pickCount?.pickedNames.includes(p.username) ?? false),
     isDnf: dnfPlayers.includes(p.username),
+    isWinner: winnerSet.has(p.username),
     revealedSymbol: revealResults?.find(r => r.username === p.username)?.symbol ?? null,
   }));
 
-  const leaderboardEntries = players.map(p => ({
+  const scoreEntries = players.map(p => ({
     userId: p.userId,
-    username: p.username,
+    username: p.userId === user?.id ? 'Sinä' : p.username,
     wins: wins.find(w => w.username === p.username)?.wins ?? 0,
+    isMe: p.userId === user?.id,
+    color: p.avatarColor,
   }));
 
+  let explanation: string | null = null;
+  if (revealResults && !isDraw && winners.length > 0) {
+    const winningSymbol = revealResults.find(r => winners.includes(r.username))?.symbol ?? null;
+    const losingSymbols = revealResults.filter(r => !winners.includes(r.username) && r.symbol).map(r => r.symbol!);
+    explanation = explainWin(winningSymbol, losingSymbols);
+  }
+
+  let statusText: string | null = null;
+  let statusKind: 'info' | 'warn' | 'accent' = 'info';
+  if (paused) { statusText = `Odotetaan, että ${waitingFor.join(', ')} palaa…`; statusKind = 'warn'; }
+  else if (retryMessage) { statusText = retryMessage; statusKind = 'warn'; }
+  else if (revealResults) statusText = null;
+  else if (iAmDnf) statusText = 'Sydämet loppuivat — katsot tämän kierroksen sivusta';
+  else if (hasPicked) { statusText = `Valinta lukittu · ${pickCount?.picked ?? 1}/${pickCount?.total ?? players.length} valmiina`; statusKind = 'accent'; }
+  else if (roundNumber !== null && countdown !== null) statusText = 'Valitse käsi ennen kuin aika loppuu';
+
+  const isManualPauseGap = readyCheckActive && readyReason === 'manual-pause';
+  const showGameOver = !!gameOverWinner && !readyCheckActive;
+  const hostName = players.find(p => p.isHost)?.username ?? null;
+
   return (
-    <div className="room-page-outer">
-      <div className={`room-page ${gameOverWinner ? 'dimmed' : ''}`} ref={containerRef} style={{ transform: `scale(${scale})` }}>
-        <div className="room-header">
-          <span className="room-code-label">{roomCode}</span>
-          <span>
-            <span className={`connection-dot ${connected ? 'connected' : 'disconnected'}`} />
-            {connected ? 'Yhdistetty' : 'Ei yhteyttä'}
-          </span>
-        </div>
-
-        {error && <div className="error-banner">{error}</div>}
-
-        {(roundNumber !== null || gameOverWinner) && wins.length > 0 && (
-          <Leaderboard entries={leaderboardEntries} />
-        )}
-
-        {roundNumber === null && !gameOverWinner && (
-          isHost ? (
-            <div className="setup-panel">
-              <div className="setup-row">
-                <span>Moodi</span>
-                <select value={mode} onChange={(e) => setMode(e.target.value as 'classic' | 'extended')}>
-                  <option value="classic">Klassinen</option>
-                  <option value="extended">KPSL-Spock</option>
-                </select>
-              </div>
-              <div className="setup-row">
-                <span>Voittoja vaadittu</span>
-                <input
-                  type="number"
-                  value={winsRequired}
-                  onChange={(e) => setWinsRequired(parseInt(e.target.value) || 1)}
-                />
-              </div>
-              <div className="btn-row">
-                <button className="btn btn-primary" onClick={handleStartGame}>Aloita peli</button>
-                <button className="btn btn-secondary" onClick={handleExit}>Exit game</button>
-              </div>
-            </div>
+    <div className="room-page">
+      <header className="room-topbar">
+        <button
+          className="icon-btn"
+          onClick={inGame && !gameOverWinner ? handlePauseToggle : handleExit}
+          aria-label={inGame && !gameOverWinner ? 'Valikko' : 'Poistu huoneesta'}
+          title={inGame && !gameOverWinner ? 'Valikko' : 'Poistu huoneesta'}
+        >
+          {inGame && !gameOverWinner ? '❙❙' : '←'}
+        </button>
+        <div className="room-topbar-center">
+          {roundNumber !== null ? (
+            <>
+              <span className="eyebrow">Kierros</span>
+              <span className="topbar-round">{roundNumber}</span>
+            </>
           ) : (
-            <div className="setup-panel">
-              <p className="round-label">Odotetaan että host aloittaa pelin...</p>
-              <button className="btn btn-secondary" onClick={handleExit}>Exit game</button>
-            </div>
-          )
-        )}
+            <span className="eyebrow">Huone {roomCode}</span>
+          )}
+        </div>
+        <div className="room-topbar-right">
+          {inGame && <span className="mode-chip">{MODE_LABEL[mode]}</span>}
+        </div>
+      </header>
 
-        {roundNumber !== null && (
-          <>
-            <p className="round-label">Kierros {roundNumber}</p>
+      {!connected && <div className="conn-banner">Yhteys katkesi — yhdistetään uudelleen…</div>}
+      {error && <div className="alert alert-danger room-alert" role="alert">{error}</div>}
 
-            {retryMessage && <div className="status-message retry">🔁 {retryMessage}</div>}
-            {dnfPlayers.length > 0 && (
-              <div className="status-message dnf">Sivussa tällä kierroksella: {dnfPlayers.join(', ')}</div>
+      {!inGame && roomCode && (
+        <RoomLobby
+          roomCode={roomCode}
+          players={players}
+          myUserId={user?.id}
+          isHost={isHost}
+          settings={settings}
+          onChange={handleSettingsChange}
+          onStart={handleStartGame}
+          onAddBot={() => socket?.emit('room:addBot', { roomCode })}
+          onRemoveBot={(userId) => socket?.emit('room:removeBot', { roomCode, userId })}
+        />
+      )}
+
+      {inGame && (
+        <main className="game">
+          <Scoreboard entries={scoreEntries} winsRequired={winsRequired} />
+
+          <PlayerCircle
+            players={circlePlayers}
+            countdown={countdown}
+            duration={duration}
+            paused={paused}
+            isRevealPhase={revealResults !== null}
+            revealContent={
+              <RoundWinnerBanner
+                winners={winners}
+                isDraw={isDraw}
+                visible={showWinnerBanner}
+                myUsername={myName}
+                explanation={explanation}
+              />
+            }
+          />
+
+          <div className={`status-line ${statusKind}`} aria-live="polite">{statusText ?? ' '}</div>
+
+          <div className="pick-dock">
+            {!revealResults && !iAmDnf && roundNumber !== null && (
+              <PickButtons mode={mode} onPick={handlePick} disabled={hasPicked || paused || countdown === null} pickedSymbol={pickedSymbol} />
             )}
-            {paused && (
-              <div className="status-message pause">⏸ Odotetaan: {waitingFor.join(', ')}</div>
-            )}
+          </div>
+        </main>
+      )}
 
-            <PlayerCircle
-              players={circlePlayers}
-              countdown={countdown}
-              duration={duration}
-              paused={paused}
-              isRevealPhase={revealResults !== null}
-            />
+      <ReadyCheckModal
+        visible={readyCheckActive && !isManualPauseGap}
+        reason={readyReason}
+        pausedByName={pausedByName}
+        readyNames={readyNames}
+        players={players}
+        myUsername={myName}
+        mode={mode}
+        winsRequired={winsRequired}
+        onReady={handleReadySubmit}
+      />
 
-            {!revealResults && !iAmDnf && (
-              <PickButtons mode={mode} onPick={handlePick} disabled={hasPicked || paused} hasPicked={hasPicked} />
-            )}
-
-            {!revealResults && iAmDnf && (
-              <p className="status-message dnf">Ei sydämiä jäljellä — katsot tätä kierrosta sivusta.</p>
-            )}
-
-            {pickCount && !revealResults && (
-              <p className="round-label">{pickCount.picked} / {pickCount.total} valinnut</p>
-            )}
-
-            {revealResults && (
-              <div className="reveal-panel">
-                <h3 className={`reveal-title ${isDraw ? 'draw' : 'win'}`}>
-                  {isDraw ? 'Tasapeli!' : `Voittaja(t): ${winners.join(', ')}`}
-                </h3>
-                <ul className="reveal-list">
-                  {revealResults.map((r, i) => (
-                    <li key={i}>
-                      {r.username}: {r.dnf ? 'DNF' : (SYMBOL_LABEL[r.symbol || ''] || 'ei valintaa')}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </>
-        )}
-      </div>
+      <PauseMenu
+        visible={isManualPauseGap}
+        iAmReady={iAmReady}
+        readyCount={readyNames.length}
+        readyTotal={readyTotal}
+        pausedByName={pausedByName}
+        mode={mode}
+        onToggleReady={handlePauseReadyToggle}
+        onExit={handleExit}
+      />
 
       <GameOverModal
-        winner={gameOverWinner}
+        winner={showGameOver ? gameOverWinner : null}
+        subtitle={gameOverReason === 'forfeit' ? 'Muut pelaajat poistuivat pelistä' : null}
+        modeLabel={MODE_LABEL[mode]}
+        winsRequired={winsRequired}
+        standings={(finalWins ?? wins).map((w, i) => ({
+          userId: players.find(p => p.username === w.username)?.userId ?? -100 - i,
+          username: w.username,
+          wins: w.wins,
+        }))}
+        myUsername={myName}
+        hostName={hostName}
         isHost={isHost}
         onReplay={handleReplay}
         onBackToLobby={handleBackToLobby}
