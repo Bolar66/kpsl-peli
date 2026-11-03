@@ -16,10 +16,20 @@ import {
 
 dotenv.config();
 
+if (!process.env.JWT_SECRET || !process.env.DATABASE_URL) {
+  console.error('JWT_SECRET ja DATABASE_URL pitää asettaa ympäristömuuttujiin');
+  process.exit(1);
+}
+
+const isProduction = process.env.NODE_ENV === 'production';
+
 const app = express();
+// Render (ja muut palvelut) välittävät pyynnöt proxyn kautta — oikea IP pyyntörajoitusta varten
+app.set('trust proxy', 1);
 app.use(cors());
 app.use(express.json({ limit: '300kb' })); // profiilikuva mahtuu mukaan
-app.use(express.static('public'));
+// Kehityksen testisivu (public/test.html) vain paikallisesti, ei julkisessa versiossa
+if (!isProduction) app.use(express.static('public'));
 
 app.use('/api/games', gameRoutes);
 app.use('/api/auth', authRoutes);
@@ -266,6 +276,10 @@ function pauseRound(roomCode: string) {
 function submitPick(roomCode: string, userId: number, symbol: string) {
   const roundNumber = currentRound[roomCode];
   if (!roundNumber || roundNumber === -1) return;
+  // Vain huoneen pelaajat, ja vain pelimuodon sallimat kädet
+  if (!roomPlayers[roomCode]?.some(p => p.userId === userId)) return;
+  const allowed = gameMode[roomCode] === 'extended' ? SYMBOLS_EXTENDED : SYMBOLS_CLASSIC;
+  if (!allowed.includes(symbol)) return;
   if (roundPaused[roomCode]) return;
   if (dnfByRoom[roomCode]?.has(userId)) return;
 
@@ -883,6 +897,7 @@ io.on('connection', (socket: AuthenticatedSocket) => {
   socket.on('ready:submit', ({ roomCode }: { roomCode: string }) => {
     if (!socket.userId) return;
     if (!awaitingReady[roomCode]) return;
+    if (!roomPlayers[roomCode]?.some(p => p.userId === socket.userId)) return;
 
     if (!readyPlayers[roomCode]) readyPlayers[roomCode] = new Set();
     readyPlayers[roomCode]!.add(socket.userId);

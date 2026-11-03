@@ -30,7 +30,7 @@ export default function Avatar({ player, size = 36, className = '' }: AvatarProp
         width: size,
         height: size,
         fontSize: isEmoji ? size * 0.55 : size * 0.42,
-        background: player.avatarImage ? `center / cover no-repeat url(${player.avatarImage})` : background,
+        background: player.avatarImage ? `center / cover no-repeat url("${player.avatarImage}")` : background,
       }}
       aria-hidden="true"
     >

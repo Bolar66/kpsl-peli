@@ -43,7 +43,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(() => readStored('token'));
   const [user, setUser] = useState<User | null>(() => {
     const stored = readStored('user');
-    return stored ? JSON.parse(stored) : null;
+    try {
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
   });
 
   function setAuth(newToken: string, newUser: User) {

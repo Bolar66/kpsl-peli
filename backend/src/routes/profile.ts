@@ -130,7 +130,7 @@ router.patch('/me', authenticateToken, async (req: AuthRequest, res: Response) =
     if (avatarImage !== undefined) {
       if (avatarImage !== null && (
         typeof avatarImage !== 'string'
-        || !/^data:image\/(jpeg|png|webp);base64,/.test(avatarImage)
+        || !/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(avatarImage)
         || avatarImage.length > MAX_IMAGE_LENGTH
       )) {
         return res.status(400).json({ error: 'Kuva on liian suuri tai väärää muotoa' });

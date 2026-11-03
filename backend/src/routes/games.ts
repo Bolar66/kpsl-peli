@@ -13,8 +13,8 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
   if (!mode || !['classic', 'extended'].includes(mode)) {
     return res.status(400).json({ error: 'Moodi vaaditaan (classic tai extended)' });
   }
-  if (!winsRequired || winsRequired < 1) {
-    return res.status(400).json({ error: 'wins_required vaaditaan (väh. 1)' });
+  if (!Number.isInteger(winsRequired) || winsRequired < 1 || winsRequired > 10) {
+    return res.status(400).json({ error: 'Voittorajan pitää olla 1–10' });
   }
 
   try {

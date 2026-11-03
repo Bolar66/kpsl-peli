@@ -2,13 +2,18 @@ import { Router } from 'express';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { pool } from '../db/pool';
+import { rateLimit } from '../middleware/rateLimit';
 
 const router = Router();
 const SALT_ROUNDS = 10;
 
+// Estää salasanojen arvailun ja tunnusten massaluonnin
+router.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 30, message: 'Liikaa yrityksiä — odota hetki ja yritä uudelleen' }));
+
 // Rekisteröinti
 router.post('/register', async (req, res) => {
-  const { username, password } = req.body;
+  const username = typeof req.body.username === 'string' ? req.body.username.trim() : '';
+  const { password } = req.body;
 
   if (!username || !password) {
     return res.status(400).json({ error: 'Käyttäjätunnus ja salasana vaaditaan' });
@@ -21,7 +26,7 @@ router.post('/register', async (req, res) => {
   }
 
   try {
-    const existing = await pool.query('SELECT id FROM users WHERE username = $1', [username]);
+    const existing = await pool.query('SELECT id FROM users WHERE LOWER(username) = LOWER($1)', [username]);
     if (existing.rows.length > 0) {
       return res.status(409).json({ error: 'Käyttäjätunnus on jo käytössä' });
     }
