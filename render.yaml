@@ -1,0 +1,24 @@
+# Render-julkaisu: yksi palvelu, jossa backend tarjoilee myös frontendin buildin.
+# Käyttö: Render → New → Blueprint → valitse tämä repo. DATABASE_URL kysytään luonnin yhteydessä.
+services:
+  - type: web
+    name: kpsl-peli
+    runtime: node
+    plan: free
+    region: frankfurt
+    branch: main
+    buildCommand: >-
+      npm ci --prefix backend --include=dev &&
+      npm ci --prefix frontend --include=dev &&
+      npm run build --prefix frontend &&
+      npm run build --prefix backend
+    # Tietokannan migraatiot ajetaan aina ennen käynnistystä (ajetut ohitetaan)
+    startCommand: npm run migrate:up --prefix backend && npm start --prefix backend
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
