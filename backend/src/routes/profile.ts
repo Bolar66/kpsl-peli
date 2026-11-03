@@ -3,6 +3,7 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { pool } from '../db/pool';
 import { authenticateToken, AuthRequest } from '../middleware/auth';
+import { validatePassword, validateUsername } from '../utils/validation';
 
 const router = Router();
 const SALT_ROUNDS = 10;
@@ -109,8 +110,9 @@ router.patch('/me', authenticateToken, async (req: AuthRequest, res: Response) =
 
   try {
     if (username !== undefined) {
-      const name = typeof username === 'string' ? username.trim() : '';
-      if (name.length < 2 || name.length > 20) return res.status(400).json({ error: 'Nimimerkin pituus 2–20 merkkiä' });
+      const checked = validateUsername(username);
+      if (!checked.ok) return res.status(400).json({ error: checked.error });
+      const name = checked.username;
       const taken = await pool.query('SELECT id FROM users WHERE LOWER(username) = LOWER($1) AND id <> $2', [name, req.userId]);
       if (taken.rows.length > 0) return res.status(409).json({ error: 'Nimimerkki on jo käytössä' });
       set('username', name);
@@ -155,9 +157,8 @@ router.patch('/me', authenticateToken, async (req: AuthRequest, res: Response) =
 // Salasanan asetus: vieras tallentaa profiilinsa, tai tavallinen käyttäjä vaihtaa salasanan
 router.post('/password', authenticateToken, async (req: AuthRequest, res: Response) => {
   const { password, currentPassword } = req.body ?? {};
-  if (typeof password !== 'string' || password.length < 6) {
-    return res.status(400).json({ error: 'Salasanan pituus vähintään 6 merkkiä' });
-  }
+  const passwordError = validatePassword(password);
+  if (passwordError) return res.status(400).json({ error: passwordError });
 
   try {
     const user = await loadUser(req.userId!);
@@ -173,6 +174,18 @@ router.post('/password', authenticateToken, async (req: AuthRequest, res: Respon
     await pool.query('UPDATE users SET password_hash = $1 WHERE id = $2', [hash, req.userId]);
     const updated = await loadUser(req.userId!);
     res.json({ profile: toProfile(updated) });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Palvelinvirhe' });
+  }
+});
+
+// Tilin ja kaikkien tietojen pysyvä poisto (GDPR: oikeus tulla unohdetuksi).
+// Tietokannan viiteavaimet poistavat käyttäjän pelirivit, valinnat ja tilastot (ON DELETE CASCADE).
+router.delete('/me', authenticateToken, async (req: AuthRequest, res: Response) => {
+  try {
+    await pool.query('DELETE FROM users WHERE id = $1', [req.userId]);
+    res.json({ ok: true });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Palvelinvirhe' });

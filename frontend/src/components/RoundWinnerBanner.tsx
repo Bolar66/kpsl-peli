@@ -19,7 +19,7 @@ export default function RoundWinnerBanner({ winners, isDraw, visible, myUsername
   else title = `${winners.join(', ')} voitti kierroksen`;
 
   return (
-    <div aria-live="polite">
+    <div className="banner-wrap" aria-live="polite">
       <AnimatePresence>
         {visible && (
           <motion.div

@@ -55,35 +55,66 @@
   max-width: 440px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding-bottom: 96px;
+  gap: 10px;
+  padding-bottom: 88px;
 }
 
 .code-block {
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  padding: 16px 0 8px;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 2px 2px;
 }
+.code-block .eyebrow { margin-bottom: 6px; }
 
-.code-big { display: flex; gap: 8px; }
+.code-big { display: flex; gap: 6px; }
 .code-big span {
-  width: 56px;
-  height: 68px;
-  border-radius: var(--radius);
+  width: 46px;
+  height: 56px;
+  border-radius: var(--radius-sm);
   background: var(--surface);
   border: 1px solid var(--border);
   display: flex;
   align-items: center;
   justify-content: center;
   font-family: var(--font-display);
-  font-size: 34px;
+  font-size: 28px;
   font-weight: 700;
   color: var(--accent);
 }
+.share-btn { min-height: 44px; padding: 0 16px; }
 
-.lobby-section { display: flex; flex-direction: column; gap: 14px; padding: 18px; }
+.lobby-section { display: flex; flex-direction: column; gap: 12px; padding: 14px 16px; }
+
+/* Pelaajat avatar-rivinä */
+.player-slots { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.player-slots li { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; }
+.slot-avatar {
+  position: relative;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.slot-empty { border: 1px dashed var(--border-strong); }
+.slot-add {
+  border: 1px dashed var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 24px;
+  cursor: pointer;
+  transition: transform 0.15s var(--ease);
+}
+.slot-add:active { transform: scale(0.92); }
+.slot-crown { position: absolute; top: -10px; right: -4px; font-size: 16px; transform: rotate(18deg); }
+.slot-avatar .remove-bot { position: absolute; top: -6px; right: -6px; width: 22px; height: 22px; font-size: 14px; background: var(--surface-2); }
+.slot-name { font-size: 12px; font-weight: 500; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.slot-name.me { color: var(--accent); font-weight: 600; }
+
+.setting-grid { display: grid; grid-template-columns: auto 1fr; gap: 12px; align-items: end; }
 .section-head { display: flex; align-items: baseline; justify-content: space-between; }
 .section-head h2 { font-size: 17px; }
 .section-head .faint { font-size: 13px; }
@@ -172,7 +203,7 @@
   background: none;
   border: none;
   border-top: 1px solid var(--border);
-  padding: 14px 0 0;
+  padding: 12px 0 0;
   cursor: pointer;
   font-size: 14px;
   font-weight: 500;
@@ -222,170 +253,294 @@
 }
 
 /* ---------- Pelinäkymä ---------- */
+/* Koko pelinäkymä mahtuu näytölle ilman vieritystä: pöytä vie jäljelle jäävän tilan */
+.room-page.in-game { height: 100dvh; min-height: 0; overflow: hidden; }
+
 .game {
   width: 100%;
   max-width: 480px;
   flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
 }
 
-.scoreboard {
-  width: 100%;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
-  gap: 8px;
-}
-
-.score {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 8px 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 0;
-}
-.score.leading { border-color: var(--border-strong); }
-.score-top { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; }
-.score-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; flex-shrink: 0; }
-.score-name { font-size: 12px; color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.score.me .score-name { color: var(--text); font-weight: 600; }
-.score-num { font-family: var(--font-display); font-weight: 700; font-size: 16px; display: inline-block; }
-.score-num .faint { font-size: 12px; font-weight: 500; }
-.score-bar { height: 3px; border-radius: 3px; background: var(--surface-3); overflow: hidden; }
-.score-fill { height: 100%; background: var(--text-2); border-radius: 3px; }
-.score.leading .score-fill, .score.me .score-fill { background: var(--accent); }
-
-/* Pelaajat ympyrässä */
-.arena {
+/* Pelipöytä */
+.table-field {
   position: relative;
-  width: min(320px, 80vw, max(280px, 40dvh));
-  aspect-ratio: 1;
-  /* Ylä- ja alapelaajan tiedot ulottuvat ympyrän ulkopuolelle */
-  margin: 52px auto 48px;
-  flex-shrink: 0;
+  flex: 1;
+  min-height: 300px;
+  width: 100%;
+  max-width: 440px;
 }
 
-.arena-ring {
+.table-felt {
   position: absolute;
-  inset: 12%;
-  border-radius: 50%;
-  border: 1px dashed var(--border);
+  background:
+    radial-gradient(ellipse 70% 55% at 50% 45%, rgba(212, 255, 58, 0.06), transparent 70%),
+    radial-gradient(ellipse at 50% 50%, #18181b 0%, #121214 60%, #0e0e10 100%);
+  border: 1px solid var(--border-strong);
+  box-shadow:
+    inset 0 0 0 8px #0f0f11,
+    inset 0 0 0 9px var(--border),
+    inset 0 20px 50px rgba(0, 0, 0, 0.45),
+    0 24px 60px rgba(0, 0, 0, 0.55);
 }
 
-.arena-center {
+.table-glow {
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.4s ease, box-shadow 0.4s ease;
+}
+.table-field.urgent .table-glow {
+  opacity: 1;
+  box-shadow: 0 0 0 1px rgba(255, 92, 92, 0.6), 0 0 40px rgba(255, 92, 92, 0.18);
+  animation: table-pulse 1s ease-in-out infinite;
+}
+.table-field.celebrate .table-glow {
+  opacity: 1;
+  box-shadow: 0 0 0 1px rgba(212, 255, 58, 0.7), 0 0 60px rgba(212, 255, 58, 0.25);
+}
+@keyframes table-pulse { 50% { opacity: 0.45; } }
+
+.table-center {
   position: absolute;
   top: 50%;
   left: 50%;
-  transform: translate(-50%, -50%);
+  /* --s: pöydän skaalaus pienillä näytöillä (lasketaan tableLayout.ts:ssä) */
+  transform: translate(-50%, -50%) scale(var(--s, 1));
+  z-index: 3;
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1;
 }
 
-.countdown { position: relative; width: 88px; height: 88px; display: flex; align-items: center; justify-content: center; }
-.countdown svg { position: absolute; inset: 0; }
+.countdown { position: relative; width: 84px; height: 84px; display: flex; align-items: center; justify-content: center; }
+.countdown svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+/* Neljällä pelaajalla sivujen korteille tarvitaan tilaa pöydän keskeltä */
+.table-field.players-4 .countdown, .table-field.players-4 .table-paused { width: 72px; height: 72px; }
+.table-field.players-4 .countdown-num { font-size: 30px; }
 .countdown-num {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   font-family: var(--font-display);
-  font-size: 38px;
+  font-size: 36px;
   font-weight: 700;
   line-height: 1;
   font-variant-numeric: tabular-nums;
 }
 .countdown.urgent .countdown-num { animation: urgent 0.5s ease-in-out infinite alternate; }
-@keyframes urgent { to { transform: scale(1.08); } }
+@keyframes urgent { to { transform: scale(1.12); } }
 
-.countdown-paused, .countdown-idle {
-  width: 88px;
-  height: 88px;
+.table-paused {
+  width: 84px;
+  height: 84px;
   border-radius: 50%;
-  border: 3px solid var(--border);
+  border: 2px solid var(--warn);
   display: flex;
   align-items: center;
   justify-content: center;
   color: var(--warn);
-  font-size: 22px;
+  font-size: 20px;
   letter-spacing: -2px;
+  background: var(--warn-soft);
 }
 
+/* Pelikortit */
+.card-slot {
+  position: absolute;
+  transform: translate(-50%, -50%) scale(var(--s, 1));
+  z-index: 2;
+}
+
+.play-card {
+  position: relative;
+  width: 54px;
+  height: 74px;
+  perspective: 700px;
+}
+.play-card.pump-0 { animation: card-pump-a 0.5s cubic-bezier(0.3, 0.7, 0.3, 1); }
+.play-card.pump-1 { animation: card-pump-b 0.5s cubic-bezier(0.3, 0.7, 0.3, 1); }
+@keyframes card-pump-a { 35% { transform: translateY(-12px) rotate(-5deg); } }
+@keyframes card-pump-b { 35% { transform: translateY(-12px) rotate(5deg); } }
+
+.play-card-inner {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+}
+
+.play-card-face {
+  position: absolute;
+  inset: 0;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  transition: border-color 0.25s ease, box-shadow 0.25s ease, opacity 0.3s ease, filter 0.3s ease;
+}
+
+.play-card-face.back {
+  background:
+    repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.025) 0 5px, transparent 5px 10px),
+    linear-gradient(160deg, #222226, #18181b);
+  border: 1px solid var(--border-strong);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45);
+}
+.play-card.thinking .back { border-style: dashed; }
+.play-card.locked .back {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft), 0 0 22px rgba(212, 255, 58, 0.22), 0 6px 16px rgba(0, 0, 0, 0.45);
+}
+.play-card.dnf .back { opacity: 0.45; }
+
+.play-card-face.front {
+  transform: rotateY(180deg);
+  background: linear-gradient(160deg, #26262b, #1a1a1d);
+  border: 1px solid var(--border-strong);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5);
+}
+.play-card.winner .front {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft), 0 0 30px rgba(212, 255, 58, 0.4);
+}
+.play-card.lost .front { opacity: 0.45; filter: grayscale(0.7); }
+
+.card-emoji { font-size: 30px; line-height: 1; }
+.card-label { font-size: 10px; font-weight: 600; color: var(--text-2); }
+.play-card.winner .card-label { color: var(--accent); }
+.card-mark { font-size: 22px; color: var(--accent); font-weight: 700; }
+.card-dnf { font-size: 22px; }
+
+.thinking-dots { display: flex; gap: 4px; }
+.thinking-dots i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--text-3);
+  animation: think 1.2s ease-in-out infinite;
+}
+.thinking-dots i:nth-child(2) { animation-delay: 0.15s; }
+.thinking-dots i:nth-child(3) { animation-delay: 0.3s; }
+@keyframes think { 0%, 60%, 100% { opacity: 0.3; transform: translateY(0); } 30% { opacity: 1; transform: translateY(-3px); } }
+
+.sparks { position: absolute; top: 50%; left: 50%; pointer-events: none; }
+.spark {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  margin: -3px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--accent);
+}
+
+/* Pelaajien paikat pöydän ympärillä (ankkuroitu avatarin keskelle) */
 .seat {
   position: absolute;
-  transform: translate(-50%, -50%);
+  transform: translate(-50%, -29px) scale(var(--s, 1));
+  transform-origin: 50% 29px;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 2px;
-  width: 104px;
-  z-index: 2;
+  width: 92px;
+  z-index: 4;
 }
-.seat.top { flex-direction: column-reverse; }
-
-.seat-info { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.seat.dnf { opacity: 0.5; }
 
 .seat-avatar {
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  background: var(--bg);
-  border: 2px solid var(--border);
+  position: relative;
+  width: 58px;
+  height: 58px;
   display: flex;
   align-items: center;
   justify-content: center;
+  border-radius: 50%;
+  background: var(--bg);
+}
+.seat-avatar .avatar-img { box-shadow: 0 0 0 2px var(--bg); }
+.seat.picked .seat-avatar::after {
+  content: '✓';
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 11px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 0 2px var(--bg);
+}
+
+.wins-ring { position: absolute; inset: 0; }
+.wins-ring circle { stroke: var(--surface-3); transition: stroke 0.4s ease; }
+.wins-ring circle.won { stroke: var(--accent); }
+
+.plus-one {
+  position: absolute;
+  top: -6px;
   font-family: var(--font-display);
   font-weight: 700;
-  font-size: 17px;
-  transition: border-color 0.25s ease, background 0.25s ease, box-shadow 0.25s ease;
+  font-size: 18px;
+  color: var(--accent);
+  text-shadow: 0 0 12px rgba(212, 255, 58, 0.6);
+  pointer-events: none;
 }
-.seat-avatar { color: var(--accent-ink); }
-.seat.picked .seat-avatar { border-color: var(--accent); }
-.seat.winner .seat-avatar { border-color: var(--accent); box-shadow: 0 0 0 6px var(--accent-soft); }
-.seat.dnf { opacity: 0.45; }
 
-.seat-name {
-  font-size: 13px;
-  font-weight: 600;
+/* Nimi ja sydämet omalla taustallaan, jotta pöydän reunaviivat eivät kulje tekstin läpi */
+.seat-tag {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
   max-width: 100%;
+  margin-top: 2px;
+  padding: 3px 9px 4px;
+  border-radius: 10px;
+  background: rgba(11, 11, 12, 0.92);
+  border: 1px solid var(--border);
+}
+.seat-name {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+  max-width: 76px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.seat-status { font-size: 11px; color: var(--warn); }
+.seat.me .seat-name { color: var(--accent); }
+.seat-meta { height: 6px; display: flex; align-items: center; }
+.seat-status { font-size: 10px; color: var(--warn); }
 
 .lives { display: flex; gap: 4px; }
 .life { width: 6px; height: 6px; border-radius: 50%; background: var(--danger); }
 .life.lost { background: transparent; box-shadow: inset 0 0 0 1px var(--border-strong); }
 
-.hand-slot {
-  height: 40px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  perspective: 400px;
-}
-.hand { font-size: 30px; line-height: 1; display: inline-block; }
-.hand-idle { opacity: 0.6; filter: grayscale(1); }
-.hand-locked { animation: shake 0.9s ease-in-out infinite; }
-.hand-revealed { filter: grayscale(0.4); opacity: 0.75; }
-.hand-win { font-size: 36px; }
-.hand-dnf { opacity: 0.5; font-size: 26px; }
-
-@keyframes shake {
-  0%, 100% { transform: translateY(0) rotate(0); }
-  30% { transform: translateY(-5px) rotate(-6deg); }
-  60% { transform: translateY(0) rotate(0); }
-}
-
 .status-line {
-  min-height: 22px;
-  font-size: 14px;
+  min-height: 20px;
+  font-size: 13px;
   color: var(--text-2);
   text-align: center;
-  padding: 0 8px;
+  padding: 2px 8px 0;
 }
 .status-line.warn { color: var(--warn); }
 .status-line.accent { color: var(--accent); }
@@ -393,64 +548,73 @@
 /* Valintanapit */
 .pick-dock {
   width: 100%;
-  margin-top: auto;
-  padding: 8px 0 calc(16px + env(safe-area-inset-bottom));
-  min-height: 112px;
-  /* Napit pysyvät aina näkyvissä myös matalalla näytöllä */
-  position: sticky;
-  bottom: 0;
-  background: linear-gradient(to top, var(--bg) 75%, transparent);
-  z-index: 3;
+  padding: 8px 0 calc(12px + env(safe-area-inset-bottom));
+  min-height: 108px;
 }
 
-.picks { display: grid; gap: 10px; }
+.picks { display: grid; gap: 8px; }
 .picks-3 { grid-template-columns: repeat(3, 1fr); }
 .picks-5 { grid-template-columns: repeat(5, 1fr); gap: 6px; }
 
 .pick {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  min-height: 88px;
+  gap: 4px;
+  min-height: 84px;
   border-radius: var(--radius);
-  background: var(--surface);
+  background: linear-gradient(180deg, #19191c, #141416);
   border: 1px solid var(--border);
   cursor: pointer;
-  transition: border-color 0.15s ease, background 0.15s ease, opacity 0.2s ease;
+  transition: border-color 0.15s ease, background 0.15s ease, opacity 0.25s ease, transform 0.2s var(--ease), box-shadow 0.2s ease;
 }
-.picks-5 .pick { min-height: 80px; }
-.pick:hover:not(:disabled) { border-color: var(--border-strong); background: var(--surface-2); }
-.pick.picked { border-color: var(--accent); background: var(--accent-soft); }
+.picks-5 .pick { min-height: 76px; }
+.pick:hover:not(:disabled) { border-color: var(--border-strong); }
+.pick.picked {
+  border-color: var(--accent);
+  background: linear-gradient(180deg, rgba(212, 255, 58, 0.14), rgba(212, 255, 58, 0.04));
+  box-shadow: 0 0 24px rgba(212, 255, 58, 0.18);
+  transform: translateY(-4px);
+}
 .pick.picked .pick-label { color: var(--accent); }
-.pick.dimmed { opacity: 0.3; }
-.pick.inactive { opacity: 0.5; }
+.pick.dimmed { opacity: 0.25; transform: scale(0.96); }
+.pick.inactive { opacity: 0.45; }
 .pick:disabled { cursor: default; }
 
-.pick-emoji { font-size: 34px; line-height: 1; }
-.picks-5 .pick-emoji { font-size: 28px; }
-.pick-label { font-size: 13px; font-weight: 600; color: var(--text-2); }
-.picks-5 .pick-label { font-size: 11px; }
+.pick-emoji { font-size: 32px; line-height: 1; }
+.picks-5 .pick-emoji { font-size: 26px; }
+.pick-label { font-size: 12px; font-weight: 600; color: var(--text-2); }
+.picks-5 .pick-label { font-size: 10px; }
 
-/* Kierroksen tulos */
+/* Kierroksen tulos pöydän keskellä */
 .round-banner {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
-  padding: 12px 14px;
+  gap: 2px;
+  padding: 10px 12px;
   border-radius: var(--radius);
-  background: var(--surface);
+  background: rgba(14, 14, 16, 0.92);
   border: 1px solid var(--border-strong);
   text-align: center;
   width: max-content;
-  max-width: 180px;
+  max-width: 150px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
 }
-.round-banner.won { border-color: var(--accent); }
-.round-banner-title { font-family: var(--font-display); font-size: 18px; font-weight: 700; line-height: 1.2; }
+.round-banner.won { border-color: var(--accent); box-shadow: 0 0 30px rgba(212, 255, 58, 0.2); }
+.round-banner-title { font-family: var(--font-display); font-size: 16px; font-weight: 700; line-height: 1.2; }
 .round-banner.won .round-banner-title { color: var(--accent); }
-.round-banner-sub { font-size: 12px; color: var(--text-2); }
+.round-banner-sub { font-size: 11px; color: var(--text-2); }
+
+/* Matalat näytöt: pienennetään kortteja ja nappeja */
+@media (max-height: 700px) {
+  .pick { min-height: 70px; }
+  .picks-5 .pick { min-height: 64px; }
+  .pick-emoji { font-size: 26px; }
+  .pick-dock { min-height: 92px; }
+}
 
 /* ---------- Ikkunoiden sisältö ---------- */
 .rules { display: flex; flex-direction: column; gap: 12px; }
@@ -509,3 +673,111 @@
 .hearts-explainer b { color: var(--text); font-weight: 600; }
 .hearts-explainer .lives { padding-top: 6px; }
 
+
+/* Matalat näytöt (esim. iPhone SE): odotushuone mahtuu ilman vieritystä */
+@media (max-height: 720px) {
+  .room-topbar { padding: 8px 0 4px; }
+  .room-lobby { gap: 8px; padding-bottom: 80px; }
+  .code-big span { width: 42px; height: 50px; font-size: 24px; }
+  .lobby-section { gap: 10px; padding: 12px 14px; }
+  .lobby-section .section-head h2 { font-size: 15px; }
+  .slot-avatar { width: 46px; height: 46px; }
+  .lobby-cta { padding-top: 10px; padding-bottom: calc(10px + env(safe-area-inset-bottom)); }
+}
+
+/* ---------- Tunnelma ja efektit ---------- */
+
+/* Pöydän pinnalla hitaasti kiertävä valo */
+.table-sweep { position: absolute; inset: 0; border-radius: inherit; overflow: hidden; pointer-events: none; }
+.table-sweep::before {
+  content: '';
+  position: absolute;
+  inset: -40%;
+  background: conic-gradient(from 0deg, transparent 0deg, rgba(212, 255, 58, 0.05) 40deg, transparent 90deg, transparent 360deg);
+  animation: felt-sweep 14s linear infinite;
+  pointer-events: none;
+}
+@keyframes felt-sweep { to { transform: rotate(360deg); } }
+
+/* Paljastuksessa pöytä tärähtää korttien osuessa */
+.table-field.revealing .table-felt { animation: table-hit 0.45s cubic-bezier(0.3, 0.7, 0.3, 1) 0.5s; }
+@keyframes table-hit {
+  20% { transform: translate(-3px, 2px) scale(1.01); }
+  45% { transform: translate(3px, -2px); }
+  70% { transform: translate(-1px, 1px); }
+}
+
+/* Hokema viimeisinä sekunteina */
+.countdown-num.chant {
+  font-size: 17px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.table-field.players-4 .countdown-num.chant { font-size: 14px; }
+
+/* Oma kortti lyödään pöytään valinnan hetkellä */
+.play-card.locked .play-card-face.back { animation: card-slam 0.38s cubic-bezier(0.2, 0.9, 0.3, 1.2); }
+@keyframes card-slam {
+  0% { transform: translateY(-26px) scale(1.35); opacity: 0.4; }
+  70% { transform: translateY(2px) scale(0.96); opacity: 1; }
+}
+
+/* Voittajan kortista lähtevä iskuaalto */
+.play-card.winner::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 14px;
+  border: 2px solid var(--accent);
+  opacity: 0;
+  pointer-events: none;
+  animation: shockwave 0.9s ease-out 0.5s;
+}
+@keyframes shockwave {
+  0% { opacity: 0.9; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.9); }
+}
+
+/* Voittoputki nimilapussa */
+.streak {
+  position: absolute;
+  top: -4px;
+  left: -8px;
+  padding: 2px 5px;
+  border-radius: 999px;
+  background: rgba(11, 11, 12, 0.92);
+  border: 1px solid rgba(255, 181, 71, 0.5);
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+  color: #FFB547;
+  text-shadow: 0 0 10px rgba(255, 140, 40, 0.6);
+}
+
+/* Kierroksen tulos nappirivin paikalla */
+.banner-wrap { width: 100%; }
+.pick-dock { display: flex; align-items: center; justify-content: center; }
+.pick-dock > .picks { width: 100%; }
+.pick-dock .round-banner {
+  width: 100%;
+  max-width: none;
+  padding: 16px 18px;
+  gap: 4px;
+  border-radius: var(--radius-lg);
+}
+.pick-dock .round-banner-title { font-size: 22px; }
+.pick-dock .round-banner-sub { font-size: 14px; }
+.round-banner.lost .round-banner-title { color: var(--text); }
+.round-banner.draw .round-banner-title { color: var(--warn); }
+
+/* Mykistysnappi yläpalkissa */
+.room-topbar-right .icon-btn { font-size: 16px; }
+
+/* Konfetti pelin voittajalle */
+.confetti { position: fixed; inset: 0; pointer-events: none; z-index: 1001; overflow: hidden; }
+.confetti span { position: absolute; top: 0; border-radius: 2px; }
+
+/* Sivupaikat ovat lähellä kentän reunaa: kapeampi nimilappu, ettei se mene reunan yli */
+.seat.side .seat-name { max-width: 60px; }
+.seat.side .seat-tag { padding: 3px 7px 4px; }

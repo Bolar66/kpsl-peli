@@ -22,6 +22,34 @@ interface GameOverModalProps {
   onExit: () => void;
 }
 
+// Konfetti arvotaan kerran, jotta uudelleenpiirto ei muuta animaatiota
+const CONFETTI_COLORS = ['#D4FF3A', '#7DD3FC', '#F9A8D4', '#FDBA74', '#C4B5FD'];
+const CONFETTI = Array.from({ length: 36 }, (_, i) => ({
+  left: Math.random() * 100,
+  delay: Math.random() * 0.6,
+  duration: 1.8 + Math.random() * 1.4,
+  drift: (Math.random() - 0.5) * 120,
+  rotate: (Math.random() - 0.5) * 720,
+  color: CONFETTI_COLORS[i % CONFETTI_COLORS.length]!,
+  wide: Math.random() > 0.5,
+}));
+
+function Confetti() {
+  return (
+    <div className="confetti" aria-hidden="true">
+      {CONFETTI.map((c, i) => (
+        <motion.span
+          key={i}
+          style={{ left: `${c.left}%`, background: c.color, width: c.wide ? 10 : 6, height: c.wide ? 6 : 10 }}
+          initial={{ y: -20, x: 0, rotate: 0, opacity: 1 }}
+          animate={{ y: '105vh', x: c.drift, rotate: c.rotate, opacity: [1, 1, 0.8] }}
+          transition={{ duration: c.duration, delay: c.delay, ease: [0.25, 0.4, 0.6, 1] }}
+        />
+      ))}
+    </div>
+  );
+}
+
 export default function GameOverModal({
   winner, subtitle, modeLabel, winsRequired, standings, myUsername, hostName, isHost, onReplay, onBackToLobby, onExit,
 }: GameOverModalProps) {
@@ -29,6 +57,9 @@ export default function GameOverModal({
   const sorted = [...standings].sort((a, b) => b.wins - a.wins);
 
   return (
+    <>
+    {/* Konfetti ikkunan ulkopuolella, jotta se sataa koko näytölle */}
+    {iWon && <Confetti />}
     <Modal open={!!winner} label="Peli päättyi">
       <motion.div
         className={`trophy ${iWon ? 'won' : ''}`}
@@ -66,5 +97,6 @@ export default function GameOverModal({
         </div>
       )}
     </Modal>
+    </>
   );
 }

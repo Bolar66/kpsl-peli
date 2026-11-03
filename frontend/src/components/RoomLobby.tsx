@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { MODE_LABEL, type GameMode } from '../constants/symbols';
 import Avatar, { type AvatarData } from './Avatar';
+import Modal from './Modal';
 
 export interface LobbySettings {
   mode: GameMode;
@@ -101,12 +102,14 @@ export default function RoomLobby({
       transition={{ duration: 0.35, ease: [0.2, 0.8, 0.2, 1] }}
     >
       <section className="code-block">
-        <p className="eyebrow">Huonekoodi</p>
-        <div className="code-big" aria-label={`Huonekoodi ${roomCode.split('').join(' ')}`}>
-          {roomCode.split('').map((c, i) => <span key={i}>{c}</span>)}
+        <div>
+          <p className="eyebrow">Huonekoodi</p>
+          <div className="code-big" aria-label={`Huonekoodi ${roomCode.split('').join(' ')}`}>
+            {roomCode.split('').map((c, i) => <span key={i}>{c}</span>)}
+          </div>
         </div>
-        <button className="btn btn-secondary btn-sm" onClick={handleShare}>
-          {copied ? '✓ Linkki kopioitu' : 'Kutsu kavereita'}
+        <button className="btn btn-secondary btn-sm share-btn" onClick={handleShare}>
+          {copied ? '✓ Kopioitu' : 'Kutsu'}
         </button>
       </section>
 
@@ -115,36 +118,38 @@ export default function RoomLobby({
           <h2>Pelaajat</h2>
           <span className="faint">{players.length}/{MAX_PLAYERS}</span>
         </div>
-        <ul className="player-list">
+        <ul className="player-slots">
           <AnimatePresence initial={false}>
             {players.map(p => (
               <motion.li
                 key={p.userId}
                 layout
-                initial={{ opacity: 0, x: -8 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: 8 }}
-                transition={{ duration: 0.2 }}
+                initial={{ opacity: 0, scale: 0.6 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.6 }}
+                transition={{ type: 'spring', stiffness: 400, damping: 24 }}
               >
-                <Avatar player={p} />
-                <span className="player-list-name">
-                  {p.username}
-                  {p.userId === myUserId && <span className="faint"> (sinä)</span>}
+                <span className="slot-avatar">
+                  <Avatar player={p} size={46} />
+                  {p.isHost && <span className="slot-crown" aria-label="Host">👑</span>}
+                  {p.isBot && isHost && (
+                    <button className="remove-bot" onClick={() => onRemoveBot(p.userId)} aria-label={`Poista ${p.username}`}>×</button>
+                  )}
                 </span>
-                {p.isHost && <span className="badge">Host</span>}
-                {p.isBot && isHost && (
-                  <button className="remove-bot" onClick={() => onRemoveBot(p.userId)} aria-label={`Poista ${p.username}`}>×</button>
-                )}
+                <span className={`slot-name ${p.userId === myUserId ? 'me' : ''}`}>
+                  {p.userId === myUserId ? 'Sinä' : p.username}
+                </span>
               </motion.li>
             ))}
           </AnimatePresence>
           {Array.from({ length: MAX_PLAYERS - players.length }).map((_, i) => (
-            <li key={`empty-${i}`} className="empty">
-              <span className="avatar empty" />
-              <span className="faint player-list-name">Vapaa paikka</span>
-              {isHost && i === 0 && (
-                <button className="btn btn-ghost btn-sm" onClick={onAddBot}>+ Lisää botti</button>
+            <li key={`empty-${i}`}>
+              {isHost && i === 0 ? (
+                <button className="slot-avatar slot-add" onClick={onAddBot} aria-label="Lisää botti">+</button>
+              ) : (
+                <span className="slot-avatar slot-empty" />
               )}
+              <span className="slot-name faint">{isHost && i === 0 ? 'Lisää botti' : 'Vapaa'}</span>
             </li>
           ))}
         </ul>
@@ -156,73 +161,61 @@ export default function RoomLobby({
           {readOnly && <span className="faint">Host valitsee</span>}
         </div>
 
-        <div className="setting">
-          <span className="setting-label">Pelimuoto</span>
-          <Segmented
-            options={[{ value: 'classic', label: MODE_LABEL.classic }, { value: 'extended', label: MODE_LABEL.extended }]}
-            value={settings.mode}
-            disabled={readOnly}
-            onChange={v => set('mode', v)}
-          />
-        </div>
+        <Segmented
+          options={[{ value: 'classic', label: MODE_LABEL.classic }, { value: 'extended', label: MODE_LABEL.extended }]}
+          value={settings.mode}
+          disabled={readOnly}
+          onChange={v => set('mode', v)}
+        />
 
-        <div className="setting setting-row">
-          <div>
-            <span className="setting-label">Voittoon tarvitaan</span>
-            <p className="setting-hint">kierrosvoittoa</p>
+        <div className="setting-grid">
+          <div className="setting">
+            <span className="setting-label">Voittoon</span>
+            <Stepper label="Voittoon tarvitaan" value={settings.winsRequired} min={1} max={10} disabled={readOnly} onChange={v => set('winsRequired', v)} />
           </div>
-          <Stepper label="Voittoon tarvitaan" value={settings.winsRequired} min={1} max={10} disabled={readOnly} onChange={v => set('winsRequired', v)} />
+          <div className="setting">
+            <span className="setting-label">Tahti</span>
+            <Segmented
+              options={[{ value: 'fast', label: 'Nopea' }, { value: 'relaxed', label: 'Rauhallinen' }]}
+              value={settings.speed}
+              disabled={readOnly}
+              onChange={v => set('speed', v)}
+            />
+          </div>
         </div>
 
-        <div className="setting">
-          <span className="setting-label">Tahti</span>
-          <Segmented
-            options={[{ value: 'fast', label: 'Nopea' }, { value: 'relaxed', label: 'Rauhallinen' }]}
-            value={settings.speed}
-            disabled={readOnly}
-            onChange={v => set('speed', v)}
-          />
-          <p className="setting-hint">
-            {settings.speed === 'fast'
-              ? 'Seuraava kierros alkaa automaattisesti.'
-              : 'Jokainen kuittaa olevansa valmis ennen seuraavaa kierrosta.'}
-          </p>
-        </div>
-
-        <button className="disclosure" onClick={() => setShowTimes(s => !s)} aria-expanded={showTimes}>
+        <button className="disclosure" onClick={() => setShowTimes(true)}>
           <span>Ajat</span>
           <span className="faint">
             {settings.firstRoundSeconds}s · {settings.laterRoundSeconds}s{settings.speed === 'fast' ? ` · tauko ${settings.roundGap}s` : ''}
           </span>
-          <span className={`chev ${showTimes ? 'open' : ''}`}>›</span>
+          <span className="chev">›</span>
         </button>
-        <AnimatePresence initial={false}>
-          {showTimes && (
-            <motion.div
-              className="times"
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.2 }}
-            >
-              <div className="setting setting-row">
-                <span className="setting-label">Ensimmäinen kierros</span>
-                <Stepper label="Ensimmäinen kierros" value={settings.firstRoundSeconds} min={5} max={20} suffix="s" disabled={readOnly} onChange={v => set('firstRoundSeconds', v)} />
-              </div>
-              <div className="setting setting-row">
-                <span className="setting-label">Muut kierrokset</span>
-                <Stepper label="Muut kierrokset" value={settings.laterRoundSeconds} min={3} max={15} suffix="s" disabled={readOnly} onChange={v => set('laterRoundSeconds', v)} />
-              </div>
-              {settings.speed === 'fast' && (
-                <div className="setting setting-row">
-                  <span className="setting-label">Tauko kierrosten välissä</span>
-                  <Stepper label="Tauko kierrosten välissä" value={settings.roundGap} min={2} max={10} suffix="s" disabled={readOnly} onChange={v => set('roundGap', v)} />
-                </div>
-              )}
-            </motion.div>
-          )}
-        </AnimatePresence>
       </section>
+
+      <Modal open={showTimes} label="Ajat" onBackdrop={() => setShowTimes(false)}>
+        <h2 className="sheet-title">Ajat</h2>
+        <p className="sheet-sub">
+          {settings.speed === 'fast'
+            ? 'Nopeassa tahdissa seuraava kierros alkaa automaattisesti tauon jälkeen.'
+            : 'Rauhallisessa tahdissa jokainen kuittaa olevansa valmis ennen seuraavaa kierrosta.'}
+        </p>
+        <div className="setting setting-row">
+          <span className="setting-label">Ensimmäinen kierros</span>
+          <Stepper label="Ensimmäinen kierros" value={settings.firstRoundSeconds} min={5} max={20} suffix="s" disabled={readOnly} onChange={v => set('firstRoundSeconds', v)} />
+        </div>
+        <div className="setting setting-row">
+          <span className="setting-label">Muut kierrokset</span>
+          <Stepper label="Muut kierrokset" value={settings.laterRoundSeconds} min={3} max={15} suffix="s" disabled={readOnly} onChange={v => set('laterRoundSeconds', v)} />
+        </div>
+        {settings.speed === 'fast' && (
+          <div className="setting setting-row">
+            <span className="setting-label">Tauko kierrosten välissä</span>
+            <Stepper label="Tauko kierrosten välissä" value={settings.roundGap} min={2} max={10} suffix="s" disabled={readOnly} onChange={v => set('roundGap', v)} />
+          </div>
+        )}
+        <button className="btn btn-primary btn-block" onClick={() => setShowTimes(false)}>Valmis</button>
+      </Modal>
 
       <div className="lobby-cta">
         {isHost ? (

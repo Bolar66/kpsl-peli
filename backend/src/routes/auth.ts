@@ -3,6 +3,7 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { pool } from '../db/pool';
 import { rateLimit } from '../middleware/rateLimit';
+import { validatePassword, validateUsername } from '../utils/validation';
 
 const router = Router();
 const SALT_ROUNDS = 10;
@@ -12,8 +13,12 @@ router.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 30, message: 'Liikaa yrity
 
 // Rekisteröinti
 router.post('/register', async (req, res) => {
-  const username = typeof req.body.username === 'string' ? req.body.username.trim() : '';
-  const { password } = req.body;
+  const checked = validateUsername(req.body?.username, 3);
+  if (!checked.ok) return res.status(400).json({ error: checked.error });
+  const { username } = checked;
+  const password = req.body?.password;
+  const passwordError = validatePassword(password);
+  if (passwordError) return res.status(400).json({ error: passwordError });
 
   if (!username || !password) {
     return res.status(400).json({ error: 'Käyttäjätunnus ja salasana vaaditaan' });
@@ -54,7 +59,9 @@ router.post('/register', async (req, res) => {
 const GUEST_PASSWORD_MARKER = 'guest';
 
 router.post('/guest', async (req, res) => {
-  const username = typeof req.body.username === 'string' ? req.body.username.trim() : '';
+  const checked = validateUsername(req.body?.username);
+  if (!checked.ok) return res.status(400).json({ error: checked.error });
+  const { username } = checked;
 
   if (username.length < 2 || username.length > 20) {
     return res.status(400).json({ error: 'Nimimerkin pituus 2–20 merkkiä' });
@@ -84,9 +91,9 @@ router.post('/guest', async (req, res) => {
 
 // Kirjautuminen
 router.post('/login', async (req, res) => {
-  const { username, password } = req.body;
+  const { username, password } = req.body ?? {};
 
-  if (!username || !password) {
+  if (typeof username !== 'string' || typeof password !== 'string' || !username || !password || password.length > 200) {
     return res.status(400).json({ error: 'Käyttäjätunnus ja salasana vaaditaan' });
   }
 

@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
+import { motion } from 'framer-motion';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../hooks/useSocket';
-import PlayerCircle from '../components/PlayerCircle';
-import Scoreboard from '../components/Scoreboard';
+import GameTable from '../components/GameTable';
 import PickButtons from '../components/PickButtons';
 import GameOverModal from '../components/GameOverModal';
 import ReadyCheckModal from '../components/ReadyCheckModal';
@@ -12,6 +12,7 @@ import RoundWinnerBanner from '../components/RoundWinnerBanner';
 import RoomLobby, { type LobbySettings } from '../components/RoomLobby';
 import { explainWin, MODE_LABEL, type GameMode } from '../constants/symbols';
 import { haptic } from '../constants/players';
+import { isMuted, setMuted, sfx } from '../constants/sound';
 import './Room.css';
 
 interface Player {
@@ -91,6 +92,9 @@ export default function Room() {
   const [readyTotal, setReadyTotal] = useState(0);
 
   const [showWinnerBanner, setShowWinnerBanner] = useState(false);
+  const [muted, setMutedState] = useState(isMuted());
+  // Voittoputket: montako kierrosta peräkkäin kukin on voittanut
+  const [streaks, setStreaks] = useState<Record<string, number>>({});
 
   const myName = user?.username || '';
   const me = players.find(p => p.userId === user?.id);
@@ -170,6 +174,7 @@ export default function Room() {
       setHearts(hearts || []);
       setReadyCheckActive(false);
       setShowWinnerBanner(false);
+      sfx.roundStart();
     });
 
     socket.on('round:retry', ({ reason }: { reason: string }) => {
@@ -206,7 +211,18 @@ export default function Room() {
       setHearts(data.hearts || []);
       setRetryMessage('');
       setShowWinnerBanner(true);
-      haptic(data.winners.includes(user?.username ?? '') && !data.isDraw ? [20, 40, 70] : 35);
+      const iWon = data.winners.includes(user?.username ?? '') && !data.isDraw;
+      haptic(iWon ? [20, 40, 70] : 35);
+      sfx.flip();
+      // Tulosääni kun kortit ovat kääntyneet
+      setTimeout(() => (data.isDraw ? sfx.draw() : iWon ? sfx.win() : sfx.lose()), 550);
+      if (!data.isDraw) {
+        setStreaks(prev => {
+          const next: Record<string, number> = {};
+          for (const w of data.winners) next[w] = (prev[w] ?? 0) + 1;
+          return next;
+        });
+      }
     });
 
     socket.on('room:joinRejected', ({ message }: { message: string }) => setJoinRejected(message));
@@ -222,7 +238,10 @@ export default function Room() {
       setGameOverReason(reason ?? null);
       setReadyCheckActive(false);
       setCountdown(null);
-      if (winner === user?.username) haptic([60, 50, 60, 50, 140]);
+      if (winner === user?.username) {
+        haptic([60, 50, 60, 50, 140]);
+        sfx.gameWin();
+      }
     });
 
     socket.on('game:reset', ({ mode, winsRequired }: { mode: GameMode; winsRequired: number }) => {
@@ -254,6 +273,7 @@ export default function Room() {
       if (readyWins) setWinsRequired(readyWins);
       setGameOverWinner(null);
       if (reason === 'game-start') {
+        setStreaks({});
         setRoundNumber(null);
         setWins([]);
         setHearts([]);
@@ -298,6 +318,17 @@ export default function Room() {
     return () => clearTimeout(timer);
   }, [countdown, paused]);
 
+  // Tikitys viimeisillä sekunneilla
+  useEffect(() => {
+    if (paused || revealResults || countdown === null || countdown < 1 || countdown > 3) return;
+    sfx.tick(countdown === 1);
+  }, [countdown, paused, revealResults]);
+
+  function toggleMute() {
+    setMuted(!muted);
+    setMutedState(!muted);
+  }
+
   function handleSettingsChange(next: LobbySettings) {
     setSettings(next);
     socket?.emit('settings:update', { roomCode, settings: next });
@@ -312,6 +343,7 @@ export default function Room() {
     setHasPicked(true);
     setPickedSymbol(symbol);
     haptic(15);
+    sfx.pick();
     socket?.emit('pick:submit', { roomCode, symbol });
   }
   function handleReplay() {
@@ -359,22 +391,17 @@ export default function Room() {
     avatarColor: p.avatarColor,
     avatarImage: p.avatarImage,
     hearts: hearts.find(h => h.username === p.username)?.hearts ?? 3,
+    wins: wins.find(w => w.username === p.username)?.wins ?? 0,
     isMe: p.userId === user?.id,
     isBot: p.isBot,
     isConnected: p.isConnected,
     hasPicked: revealResults === null && (pickCount?.pickedNames.includes(p.username) ?? false),
     isDnf: dnfPlayers.includes(p.username),
     isWinner: winnerSet.has(p.username),
+    streak: streaks[p.username] ?? 0,
     revealedSymbol: revealResults?.find(r => r.username === p.username)?.symbol ?? null,
   }));
 
-  const scoreEntries = players.map(p => ({
-    userId: p.userId,
-    username: p.userId === user?.id ? 'Sinä' : p.username,
-    wins: wins.find(w => w.username === p.username)?.wins ?? 0,
-    isMe: p.userId === user?.id,
-    color: p.avatarColor,
-  }));
 
   let explanation: string | null = null;
   if (revealResults && !isDraw && winners.length > 0) {
@@ -397,7 +424,7 @@ export default function Room() {
   const hostName = players.find(p => p.isHost)?.username ?? null;
 
   return (
-    <div className="room-page">
+    <div className={`room-page ${inGame ? 'in-game' : 'in-lobby'}`}>
       <header className="room-topbar">
         <button
           className="icon-btn"
@@ -410,15 +437,30 @@ export default function Room() {
         <div className="room-topbar-center">
           {roundNumber !== null ? (
             <>
-              <span className="eyebrow">Kierros</span>
-              <span className="topbar-round">{roundNumber}</span>
+              <motion.span
+                key={roundNumber}
+                className="topbar-round"
+                initial={{ scale: 1.4, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ type: 'spring', stiffness: 400, damping: 18 }}
+              >
+                Kierros {roundNumber}
+              </motion.span>
+              <span className="eyebrow">{MODE_LABEL[mode]} · voittoon {winsRequired}</span>
             </>
           ) : (
-            <span className="eyebrow">Huone {roomCode}</span>
+            <span className="eyebrow">{inGame ? 'Peli alkaa' : 'Odotushuone'}</span>
           )}
         </div>
         <div className="room-topbar-right">
-          {inGame && <span className="mode-chip">{MODE_LABEL[mode]}</span>}
+          <button
+            className="icon-btn"
+            onClick={toggleMute}
+            aria-label={muted ? 'Äänet päälle' : 'Mykistä äänet'}
+            title={muted ? 'Äänet päälle' : 'Mykistä äänet'}
+          >
+            {muted ? '🔇' : '🔊'}
+          </button>
         </div>
       </header>
 
@@ -441,15 +483,21 @@ export default function Room() {
 
       {inGame && (
         <main className="game">
-          <Scoreboard entries={scoreEntries} winsRequired={winsRequired} />
-
-          <PlayerCircle
+          <GameTable
             players={circlePlayers}
+            winsRequired={winsRequired}
             countdown={countdown}
             duration={duration}
             paused={paused}
             isRevealPhase={revealResults !== null}
-            revealContent={
+            isDraw={isDraw}
+          />
+
+          <div className={`status-line ${statusKind}`} aria-live="polite">{statusText ?? ' '}</div>
+
+          {/* Paljastuksen aikana nappirivin paikalla näytetään kierroksen tulos */}
+          <div className="pick-dock">
+            {revealResults ? (
               <RoundWinnerBanner
                 winners={winners}
                 isDraw={isDraw}
@@ -457,13 +505,7 @@ export default function Room() {
                 myUsername={myName}
                 explanation={explanation}
               />
-            }
-          />
-
-          <div className={`status-line ${statusKind}`} aria-live="polite">{statusText ?? ' '}</div>
-
-          <div className="pick-dock">
-            {!revealResults && !iAmDnf && roundNumber !== null && (
+            ) : !iAmDnf && roundNumber !== null && (
               <PickButtons mode={mode} onPick={handlePick} disabled={hasPicked || paused || countdown === null} pickedSymbol={pickedSymbol} />
             )}
           </div>

@@ -11,7 +11,7 @@ export default function RulesList({ mode }: { mode: GameMode }) {
           <li key={`${r.from}-${r.to}`}>
             <span className="rule-emoji">{SYMBOL_INFO[r.from]!.emoji}</span>
             <span>
-              <b>{SYMBOL_INFO[r.from]!.label}</b> {r.verb} <span className="muted">{SYMBOL_INFO[r.to]!.label.toLowerCase()}</span>
+              <b>{SYMBOL_INFO[r.from]!.label}</b> {r.verb} <span className="muted">{r.object}</span>
             </span>
             <span className="rule-emoji faded">{SYMBOL_INFO[r.to]!.emoji}</span>
           </li>

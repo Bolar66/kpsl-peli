@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { login, playAsGuest, register } from '../api/auth';
 import { useAuth } from '../context/AuthContext';
@@ -138,6 +138,10 @@ export default function AuthForm({ initialMode }: AuthFormProps) {
             : 'Tunnuksella voit kirjautua millä tahansa laitteella.'}
         </p>
       </motion.div>
+      <p className="legal-note">
+        Jatkamalla hyväksyt, että nimimerkkisi ja pelitietosi tallennetaan pelin toimintaa varten.{' '}
+        <Link to="/tietosuoja">Tietosuojaseloste</Link>
+      </p>
     </div>
   );
 }

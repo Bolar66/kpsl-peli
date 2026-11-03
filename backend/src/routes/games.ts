@@ -3,11 +3,16 @@ import { pool } from '../db/pool';
 import { authenticateToken, AuthRequest } from '../middleware/auth';
 import { generateRoomCode } from '../utils/roomCode';
 import { getLatestGameByRoomCode } from '../db/gameQueries';
+import { rateLimit } from '../middleware/rateLimit';
+import { parseRoomCode } from '../utils/validation';
 
 const router = Router();
 
+// Huoneiden massaluonnin esto
+const createLimit = rateLimit({ windowMs: 10 * 60 * 1000, max: 30, message: 'Liikaa huoneita lyhyessä ajassa — odota hetki' });
+
 // Luo huone
-router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
+router.post('/', createLimit, authenticateToken, async (req: AuthRequest, res: Response) => {
   const { mode, winsRequired } = req.body;
 
   if (!mode || !['classic', 'extended'].includes(mode)) {
@@ -48,7 +53,8 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
 
 // Liity huoneeseen
 router.post('/:roomCode/join', authenticateToken, async (req: AuthRequest, res: Response) => {
-  const roomCode = String(req.params.roomCode).toUpperCase();
+  const roomCode = parseRoomCode(req.params.roomCode);
+  if (!roomCode) return res.status(404).json({ error: 'Huonetta ei löytynyt' });
 
   try {
     const game = await getLatestGameByRoomCode(roomCode);

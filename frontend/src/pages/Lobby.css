@@ -86,3 +86,12 @@
   font-size: 12px;
   color: var(--text);
 }
+
+/* Matalilla näytöillä etusivu mahtuu ilman vieritystä */
+@media (max-height: 760px) {
+  .lobby-hero h1 { font-size: 26px; }
+  .lobby-hero .muted { font-size: 14px; }
+  .lobby-card { gap: 12px; padding: 16px; }
+  .lobby-card-text { display: none; }
+  .how-to { display: none; }
+}

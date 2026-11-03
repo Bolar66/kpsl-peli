@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { AuthError } from '../api/games';
-import { getMyProfile, setPassword, updateMyProfile, type ModeStats, type Profile as ProfileData, type ProfileStats } from '../api/profile';
+import { deleteMyAccount, getMyProfile, setPassword, updateMyProfile, type ModeStats, type Profile as ProfileData, type ProfileStats } from '../api/profile';
 import Avatar from '../components/Avatar';
 import ProfileEditor from '../components/ProfileEditor';
 import Modal from '../components/Modal';
@@ -39,6 +39,20 @@ export default function Profile() {
   const [passwordOpen, setPasswordOpen] = useState(false);
   const [confirmLogout, setConfirmLogout] = useState(false);
   const [view, setView] = useState<StatsView>('all');
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  async function handleDelete() {
+    setDeleting(true);
+    try {
+      await deleteMyAccount(token!);
+      logout();
+    } catch (err) {
+      setDeleting(false);
+      setConfirmDelete(false);
+      handleError(err);
+    }
+  }
 
   const handleError = useCallback((err: unknown) => {
     if (err instanceof AuthError) { logout(); return; }
@@ -211,6 +225,10 @@ export default function Profile() {
           <button className="btn btn-ghost btn-block" onClick={() => (profile?.isGuest ? setConfirmLogout(true) : logout())}>
             Kirjaudu ulos
           </button>
+          <div className="profile-links">
+            <Link to="/tietosuoja">Tietosuojaseloste</Link>
+            <button className="link-danger" onClick={() => setConfirmDelete(true)}>Poista tili</button>
+          </div>
         </section>
       </motion.main>
 
@@ -227,6 +245,17 @@ export default function Profile() {
           }}
         />
       )}
+
+      <Modal open={confirmDelete} label="Poista tili" onBackdrop={() => !deleting && setConfirmDelete(false)}>
+        <h2 className="sheet-title">Poistetaanko tili?</h2>
+        <p className="sheet-sub">Tilisi, profiilikuvasi, pelihistoriasi ja tilastosi poistetaan pysyvästi. Tätä ei voi perua.</p>
+        <div className="sheet-actions">
+          <button className="btn btn-danger btn-block" onClick={handleDelete} disabled={deleting}>
+            {deleting ? 'Poistetaan…' : 'Poista tili pysyvästi'}
+          </button>
+          <button className="btn btn-ghost btn-block" onClick={() => setConfirmDelete(false)} disabled={deleting}>Peruuta</button>
+        </div>
+      </Modal>
 
       <Modal open={confirmLogout} label="Kirjaudu ulos" onBackdrop={() => setConfirmLogout(false)}>
         <h2 className="sheet-title">Kirjaudutaanko ulos?</h2>

@@ -62,6 +62,10 @@ export function updateMyProfile(token: string, changes: Partial<Pick<Profile, 'u
   return request<{ profile: Profile; token: string }>(token, '/me', 'PATCH', changes);
 }
 
+export function deleteMyAccount(token: string) {
+  return request<{ ok: true }>(token, '/me', 'DELETE');
+}
+
 export function setPassword(token: string, password: string, currentPassword?: string) {
   return request<{ profile: Profile }>(token, '/password', 'POST', { password, currentPassword });
 }

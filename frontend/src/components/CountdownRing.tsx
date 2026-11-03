@@ -6,13 +6,16 @@ interface CountdownRingProps {
 }
 
 const SIZE = 88;
+const CHANT: Record<number, string> = { 3: 'Kivi', 2: 'Paperi', 1: 'Sakset!', 0: 'Nyt!' };
 const STROKE = 3;
 const RADIUS = (SIZE - STROKE) / 2 - 2;
 
 export default function CountdownRing({ countdown, duration }: CountdownRingProps) {
   const fraction = Math.max(Math.min(countdown / duration, 1), 0);
   const circumference = 2 * Math.PI * RADIUS;
-  const urgent = countdown <= 2;
+  const urgent = countdown <= 3;
+  // Viimeiset sekunnit huudetaan kuin oikeassa pelissä: kivi… paperi… sakset!
+  const chant = CHANT[countdown];
   const color = urgent ? 'var(--danger)' : 'var(--accent)';
 
   return (
@@ -29,18 +32,17 @@ export default function CountdownRing({ countdown, duration }: CountdownRingProp
           style={{ transition: 'stroke-dashoffset 1s linear, stroke 0.3s ease' }}
         />
       </svg>
-      <AnimatePresence mode="popLayout" initial={false}>
+      <AnimatePresence initial={false}>
         <motion.span
           key={countdown}
-          className="countdown-num"
+          className={`countdown-num ${chant ? 'chant' : ''}`}
           style={{ color }}
-          initial={{ opacity: 0, scale: 1.4 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 0.7 }}
-          transition={{ duration: 0.25, ease: [0.2, 0.8, 0.2, 1] }}
+          initial={{ opacity: 0, scale: 1.5 }}
+          animate={{ opacity: 1, scale: 1, transition: { duration: 0.3, ease: [0.2, 0.8, 0.2, 1] } }}
+          exit={{ opacity: 0, scale: 0.6, transition: { duration: 0.1 } }}
           aria-live="polite"
         >
-          {countdown}
+          {chant ?? countdown}
         </motion.span>
       </AnimatePresence>
     </div>

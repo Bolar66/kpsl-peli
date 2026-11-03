@@ -18,18 +18,18 @@ export const MODE_LABEL: Record<GameMode, string> = {
   extended: 'Lisko–Spock',
 };
 
-// Kuka voittaa kenet ja millä verbillä
-export const RULES: { from: string; to: string; verb: string; modes: GameMode[] }[] = [
-  { from: 'rock', to: 'scissors', verb: 'murskaa', modes: ['classic', 'extended'] },
-  { from: 'paper', to: 'rock', verb: 'peittää', modes: ['classic', 'extended'] },
-  { from: 'scissors', to: 'paper', verb: 'leikkaa', modes: ['classic', 'extended'] },
-  { from: 'rock', to: 'lizard', verb: 'murskaa', modes: ['extended'] },
-  { from: 'paper', to: 'spock', verb: 'kumoaa', modes: ['extended'] },
-  { from: 'scissors', to: 'lizard', verb: 'katkaisee', modes: ['extended'] },
-  { from: 'lizard', to: 'spock', verb: 'myrkyttää', modes: ['extended'] },
-  { from: 'lizard', to: 'paper', verb: 'syö', modes: ['extended'] },
-  { from: 'spock', to: 'scissors', verb: 'hajottaa', modes: ['extended'] },
-  { from: 'spock', to: 'rock', verb: 'höyrystää', modes: ['extended'] },
+// Kuka voittaa kenet ja millä verbillä. "object" on hävinnyt käsi lauseen objektina (oikea sijamuoto).
+export const RULES: { from: string; to: string; verb: string; object: string; modes: GameMode[] }[] = [
+  { from: 'rock', to: 'scissors', verb: 'murskaa', object: 'sakset', modes: ['classic', 'extended'] },
+  { from: 'paper', to: 'rock', verb: 'peittää', object: 'kiven', modes: ['classic', 'extended'] },
+  { from: 'scissors', to: 'paper', verb: 'leikkaavat', object: 'paperin', modes: ['classic', 'extended'] },
+  { from: 'rock', to: 'lizard', verb: 'murskaa', object: 'liskon', modes: ['extended'] },
+  { from: 'paper', to: 'spock', verb: 'kumoaa', object: 'Spockin', modes: ['extended'] },
+  { from: 'scissors', to: 'lizard', verb: 'katkaisevat', object: 'liskon', modes: ['extended'] },
+  { from: 'lizard', to: 'spock', verb: 'myrkyttää', object: 'Spockin', modes: ['extended'] },
+  { from: 'lizard', to: 'paper', verb: 'syö', object: 'paperin', modes: ['extended'] },
+  { from: 'spock', to: 'scissors', verb: 'hajottaa', object: 'sakset', modes: ['extended'] },
+  { from: 'spock', to: 'rock', verb: 'höyrystää', object: 'kiven', modes: ['extended'] },
 ];
 
 export function rulesForMode(mode: GameMode) {
@@ -41,7 +41,5 @@ export function explainWin(winningSymbol: string | null, losingSymbols: string[]
   if (!winningSymbol) return null;
   const rule = RULES.find(r => r.from === winningSymbol && losingSymbols.includes(r.to));
   if (!rule) return null;
-  const from = SYMBOL_INFO[rule.from]!;
-  const to = SYMBOL_INFO[rule.to]!;
-  return `${from.label} ${rule.verb} ${to.label.toLowerCase()}`;
+  return `${SYMBOL_INFO[rule.from]!.label} ${rule.verb} ${rule.object}`;
 }

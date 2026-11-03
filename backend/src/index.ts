@@ -7,6 +7,7 @@ import jwt from 'jsonwebtoken';
 import path from 'path';
 import fs from 'fs';
 import { pool } from './db/pool';
+import { clampNumber, parseRoomCode } from './utils/validation';
 import authRoutes from './routes/auth';
 import gameRoutes from './routes/games';
 import profileRoutes from './routes/profile';
@@ -27,6 +28,16 @@ const app = express();
 // Render (ja muut palvelut) välittävät pyynnöt proxyn kautta — oikea IP pyyntörajoitusta varten
 app.set('trust proxy', 1);
 app.use(cors());
+// Perustason tietoturvaotsakkeet: ei upotusta muiden sivuille, ei MIME-arvailua, ei viittaajan vuotamista
+app.use((_req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  if (isProduction) res.setHeader('Strict-Transport-Security', 'max-age=31536000');
+  next();
+});
+app.disable('x-powered-by');
 app.use(express.json({ limit: '300kb' })); // profiilikuva mahtuu mukaan
 // Kehityksen testisivu (public/test.html) vain paikallisesti, ei julkisessa versiossa
 if (!isProduction) app.use(express.static('public'));
@@ -37,6 +48,13 @@ app.use('/api/profile', profileRoutes);
 
 const httpServer = createServer(app);
 const io = new Server(httpServer, { cors: { origin: '*' } });
+
+// Virheellinen JSON tai liian suuri pyyntö: selkeä vastaus ilman palvelimen sisäisiä tietoja
+app.use((err: any, _req: express.Request, res: express.Response, next: express.NextFunction) => {
+  if (err?.type === 'entity.too.large') return res.status(413).json({ error: 'Pyyntö on liian suuri' });
+  if (err?.type === 'entity.parse.failed') return res.status(400).json({ error: 'Virheellinen pyyntö' });
+  next(err);
+});
 
 app.get('/api/health', async (req, res) => {
   try {
@@ -51,8 +69,20 @@ app.get('/api/health', async (req, res) => {
 // Tuotannossa backend tarjoilee myös frontendin buildin, jolloin koko peli toimii yhdestä osoitteesta
 const frontendDist = path.join(__dirname, '../../frontend/dist');
 if (fs.existsSync(frontendDist)) {
-  app.use(express.static(frontendDist));
-  app.get(/^\/(?!api\/|socket\.io\/).*/, (_req, res) => res.sendFile(path.join(frontendDist, 'index.html')));
+  // Hashatut tiedostot (assets/) voi välimuistittaa pitkään; index.html haetaan aina tuoreena
+  app.use(express.static(frontendDist, {
+    index: false,
+    setHeaders: (res, filePath) => {
+      if (filePath.includes(`${path.sep}assets${path.sep}`)) res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    },
+  }));
+  const indexHtml = fs.readFileSync(path.join(frontendDist, 'index.html'), 'utf8');
+  app.get(/^\/(?!api\/|socket\.io\/).*/, (req, res) => {
+    // Linkin esikatselukuva tarvitsee täydellisen osoitteen
+    const origin = `${req.protocol}://${req.get('host')}`;
+    res.setHeader('Cache-Control', 'no-cache');
+    res.type('html').send(indexHtml.split('__ORIGIN__').join(origin));
+  });
 }
 
 interface AuthenticatedSocket extends Socket {
@@ -88,6 +118,7 @@ interface SymbolStat { count: number; wins: number; losses: number; draws: numbe
 
 const RECONNECT_GRACE_MS = 60 * 1000;
 const PAUSE_GRACE_MS = 5 * 1000;
+const ALL_PICKED_COUNTDOWN_MS = 3 * 1000;
 const STARTING_HEARTS = 3;
 
 const roomPlayers: Record<string, RoomPlayer[]> = {};
@@ -146,19 +177,20 @@ interface LobbySettings {
 }
 const lobbySettingsByRoom: Record<string, LobbySettings> = {};
 
-function sanitizeSettings(s: Partial<LobbySettings> = {}): LobbySettings {
+function sanitizeSettings(input: unknown): LobbySettings {
+  const s = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>;
   return {
     mode: s.mode === 'extended' ? 'extended' : 'classic',
     winsRequired: clampWinsRequired(s.winsRequired),
     speed: s.speed === 'relaxed' ? 'relaxed' : 'fast',
-    firstRoundSeconds: Math.min(Math.max(s.firstRoundSeconds || 15, 5), 20),
-    laterRoundSeconds: Math.min(Math.max(s.laterRoundSeconds || 8, 3), 15),
-    roundGap: Math.min(Math.max(s.roundGap || 5, 2), 10),
+    firstRoundSeconds: clampNumber(s.firstRoundSeconds, 5, 20, 15),
+    laterRoundSeconds: clampNumber(s.laterRoundSeconds, 3, 15, 8),
+    roundGap: clampNumber(s.roundGap, 2, 10, 5),
   };
 }
 
-function clampWinsRequired(value: number | undefined): number {
-  return Math.min(Math.max(Math.round(value || 3), 1), 10);
+function clampWinsRequired(value: unknown): number {
+  return clampNumber(value, 1, 10, 3);
 }
 
 // Palauttaa syyn miksi käyttäjä ei voi liittyä huoneeseen, null jos voi,
@@ -262,7 +294,32 @@ function cleanupRoom(roomCode: string) {
   delete readyReasonByRoom[roomCode]; delete pausedByNameByRoom[roomCode];
   delete lastRevealByRoom[roomCode]; delete gameOverWinnerByRoom[roomCode]; delete roomCreatorByRoom[roomCode];
   delete lobbySettingsByRoom[roomCode];
+  clearBotPicks(roomCode);
   console.log(`Huone ${roomCode}: siivottu kokonaan`);
+}
+
+// Botit valitsevat ihmismäisellä viiveellä: yleensä muutamassa sekunnissa, joskus vasta loppuhetkillä
+const botPickTimers: Record<string, NodeJS.Timeout[]> = {};
+
+function clearBotPicks(roomCode: string) {
+  botPickTimers[roomCode]?.forEach(t => clearTimeout(t));
+  delete botPickTimers[roomCode];
+}
+
+function scheduleBotPicks(roomCode: string, roundNumber: number, durationMs: number) {
+  clearBotPicks(roomCode);
+  const dnfSet = dnfByRoom[roomCode] || new Set();
+  const mode = gameMode[roomCode] || 'classic';
+  botPickTimers[roomCode] = (roomPlayers[roomCode] || [])
+    .filter(p => p.isBot && !dnfSet.has(p.userId))
+    .map(p => {
+      const quick = Math.random() < 0.75;
+      const delay = quick ? 900 + Math.random() * 2600 : durationMs * (0.45 + Math.random() * 0.4);
+      return setTimeout(() => {
+        if (currentRound[roomCode] !== roundNumber) return;
+        submitPick(roomCode, p.userId, getRandomSymbol(mode));
+      }, Math.min(delay, Math.max(durationMs - 700, 300)));
+    });
 }
 
 function pauseRound(roomCode: string) {
@@ -302,7 +359,8 @@ function checkAllPicked(roomCode: string, roundNumber: number) {
   if (pickedUserIds.length >= required.length && required.length > 0 && !spedUp[roomCode] && roundTimers[roomCode]) {
     spedUp[roomCode] = true;
     const remainingMs = Math.max((roundTimerEndAt[roomCode] || Date.now()) - Date.now(), 300);
-    const newRemainingMs = remainingMs / 1.5;
+    // Kun kaikki ovat valinneet, ei odotella turhaan: ajastin hyppää 3 sekuntiin (3–2–1 ja paljastus)
+    const newRemainingMs = Math.min(remainingMs, ALL_PICKED_COUNTDOWN_MS);
     clearTimeout(roundTimers[roomCode]);
     roundTimerEndAt[roomCode] = Date.now() + newRemainingMs;
     roundTimers[roomCode] = setTimeout(() => handleTimeout(roomCode, roundNumber), newRemainingMs);
@@ -374,12 +432,7 @@ function startRound(roomCode: string, roundNumber: number, isRetry: boolean = fa
   });
   console.log(`Huone ${roomCode}: kierros ${roundNumber} alkoi, ${duration}s`);
 
-  const players = roomPlayers[roomCode] || [];
-  const symbols = gameMode[roomCode] === 'extended' ? SYMBOLS_EXTENDED : SYMBOLS_CLASSIC;
-  players.filter(p => p.isBot && !dnfSet.has(p.userId)).forEach(p => {
-    const randomSymbol = symbols[Math.floor(Math.random() * symbols.length)]!;
-    submitPick(roomCode, p.userId, randomSymbol);
-  });
+  scheduleBotPicks(roomCode, roundNumber, duration * 1000);
 
   roundTimers[roomCode] = setTimeout(() => {
     handleTimeout(roomCode, roundNumber);
@@ -391,6 +444,12 @@ function handleTimeout(roomCode: string, roundNumber: number) {
 
   const players = roomPlayers[roomCode] || [];
   const dnfSet = dnfByRoom[roomCode] || (dnfByRoom[roomCode] = new Set());
+  // Varmuuden vuoksi: botti joka ei jostain syystä ehtinyt valita, valitsee nyt
+  clearBotPicks(roomCode);
+  players.filter(p => p.isBot && !dnfSet.has(p.userId) && roundPicks[roomCode]?.[p.userId] === undefined).forEach(p => {
+    if (!roundPicks[roomCode]) roundPicks[roomCode] = {};
+    roundPicks[roomCode]![p.userId] = getRandomSymbol(gameMode[roomCode] || 'classic');
+  });
   const missing = players.filter(p => !p.isBot && !dnfSet.has(p.userId) && roundPicks[roomCode]?.[p.userId] === undefined);
 
   if (missing.length === 0) {
@@ -470,10 +529,8 @@ function resolveRound(roomCode: string, roundNumber: number) {
     io.to(roomCode).emit('round:retry', { reason: 'draw' });
     roundPicks[roomCode] = {};
     spedUp[roomCode] = false;
-    activePlayers.filter(p => p.isBot).forEach(p => {
-      roundPicks[roomCode]![p.userId] = getRandomSymbol(mode);
-    });
     const duration = getRoundDuration(roomCode, roundNumber);
+    scheduleBotPicks(roomCode, roundNumber, duration * 1000);
     roundTimerEndAt[roomCode] = Date.now() + duration * 1000;
     io.to(roomCode).emit('round:start', {
       roundNumber, duration, mode,
@@ -734,9 +791,49 @@ function sendRoomState(socket: AuthenticatedSocket, roomCode: string) {
   });
 }
 
+// Viestien määrän rajoitus per yhteys: tavallinen pelaaminen lähettää muutaman viestin sekunnissa
+const EVENTS_PER_SECOND = 20;
+const MAX_REJECTED_JOINS = 15;
+const EVENT_BURST = 40;
+
+// Jokainen asiakkaan tapahtuma ajetaan tämän kautta: huonekoodi tarkistetaan ja normalisoidaan,
+// liian tiheät viestit hylätään, eikä yksittäisen käsittelijän virhe voi kaataa koko palvelinta.
+function onEvent(
+  socket: AuthenticatedSocket,
+  event: string,
+  handler: (payload: Record<string, any> & { roomCode: string }) => unknown,
+) {
+  let tokens = EVENT_BURST;
+  let last = Date.now();
+  socket.on(event, (payload: unknown) => {
+    const now = Date.now();
+    tokens = Math.min(EVENT_BURST, tokens + ((now - last) / 1000) * EVENTS_PER_SECOND);
+    last = now;
+    if (tokens < 1) return;
+    tokens -= 1;
+
+    const data = payload && typeof payload === 'object' && !Array.isArray(payload) ? payload as Record<string, any> : {};
+    const roomCode = parseRoomCode(data.roomCode);
+    if (!roomCode) return;
+    try {
+      const result = handler({ ...data, roomCode });
+      if (result instanceof Promise) result.catch(err => console.error(`Virhe tapahtumassa ${event}:`, err));
+    } catch (err) {
+      console.error(`Virhe tapahtumassa ${event}:`, err);
+    }
+  });
+}
+
 io.on('connection', (socket: AuthenticatedSocket) => {
-  socket.on('room:join', async ({ roomCode }: { roomCode: string }) => {
-    const reject = (message: string) => socket.emit('room:joinRejected', { message });
+  // Huonekoodien arvailun esto: liian monta hylättyä liittymistä katkaisee yhteyden
+  let rejectedJoins = 0;
+
+  onEvent(socket, 'room:join', async ({ roomCode }) => {
+    const reject = (message: string) => {
+      socket.emit('room:joinRejected', { message });
+      rejectedJoins += 1;
+      if (rejectedJoins > MAX_REJECTED_JOINS) socket.disconnect(true);
+    };
 
     // Huone ei ole muistissa: tarkistetaan tietokannasta että se on olemassa eikä peli ole jo pelattu
     if (!roomPlayers[roomCode]) {
@@ -804,7 +901,7 @@ io.on('connection', (socket: AuthenticatedSocket) => {
     if (wasWaiting) checkResumeAfterPlayerReady(roomCode);
   });
 
-  socket.on('room:leave', ({ roomCode }: { roomCode: string }) => {
+  onEvent(socket, 'room:leave', ({ roomCode }) => {
     const players = roomPlayers[roomCode];
     if (!players) return;
     const player = players.find(p => p.socketId === socket.id);
@@ -815,7 +912,7 @@ io.on('connection', (socket: AuthenticatedSocket) => {
   });
 
   // Host voi täyttää vapaita paikkoja boteilla ennen pelin alkua (testaus ja yksinpeli)
-  socket.on('room:addBot', ({ roomCode }: { roomCode: string }) => {
+  onEvent(socket, 'room:addBot', ({ roomCode }) => {
     const players = roomPlayers[roomCode];
     const player = players?.find(p => p.socketId === socket.id);
     if (!players || !player?.isHost || gameStarted[roomCode]) return;
@@ -824,7 +921,7 @@ io.on('connection', (socket: AuthenticatedSocket) => {
       return;
     }
     const takenNames = new Set(players.map(p => p.username));
-    const name = BOT_NAMES.map(n => `${n} 🤖`).find(n => !takenNames.has(n)) ?? `Botti ${players.length + 1}`;
+    const name = BOT_NAMES.find(n => !takenNames.has(n)) ?? `Botti ${players.length + 1}`;
     // Botit eivät ole "yhdistettyjä", jotta huone siivotaan kun viimeinen ihminen lähtee
     players.push({
       socketId: '', userId: nextBotUserId--, username: name,
@@ -833,7 +930,7 @@ io.on('connection', (socket: AuthenticatedSocket) => {
     io.to(roomCode).emit('room:players', { players });
   });
 
-  socket.on('room:removeBot', ({ roomCode, userId }: { roomCode: string; userId: number }) => {
+  onEvent(socket, 'room:removeBot', ({ roomCode, userId }) => {
     const players = roomPlayers[roomCode];
     const player = players?.find(p => p.socketId === socket.id);
     if (!players || !player?.isHost || gameStarted[roomCode] || userId >= 0) return;
@@ -841,16 +938,14 @@ io.on('connection', (socket: AuthenticatedSocket) => {
     io.to(roomCode).emit('room:players', { players: roomPlayers[roomCode] });
   });
 
-  socket.on('settings:update', ({ roomCode, settings }: { roomCode: string; settings: Partial<LobbySettings> }) => {
+  onEvent(socket, 'settings:update', ({ roomCode, settings }) => {
     const player = roomPlayers[roomCode]?.find(p => p.socketId === socket.id);
     if (!player?.isHost || gameStarted[roomCode]) return;
     lobbySettingsByRoom[roomCode] = sanitizeSettings(settings);
     socket.to(roomCode).emit('settings:update', lobbySettingsByRoom[roomCode]);
   });
 
-  socket.on('game:start', async ({ roomCode, winsRequired: reqWins, mode, speed, roundGap, firstRoundSeconds, laterRoundSeconds }: {
-    roomCode: string; winsRequired?: number; mode?: 'classic' | 'extended'; speed?: 'fast' | 'relaxed'; roundGap?: number; firstRoundSeconds?: number; laterRoundSeconds?: number;
-  }) => {
+  onEvent(socket, 'game:start', async ({ roomCode, winsRequired: reqWins, mode, speed, roundGap, firstRoundSeconds, laterRoundSeconds }) => {
     const players = roomPlayers[roomCode];
     if (!players) return;
 
@@ -878,12 +973,13 @@ io.on('connection', (socket: AuthenticatedSocket) => {
       return;
     }
 
-    winsRequired[roomCode] = clampWinsRequired(reqWins);
-    gameMode[roomCode] = mode === 'extended' ? 'extended' : 'classic';
-    gameSpeed[roomCode] = speed === 'relaxed' ? 'relaxed' : 'fast';
-    roundGapSeconds[roomCode] = Math.min(Math.max(roundGap || 5, 2), 10);
-    firstRoundDuration[roomCode] = Math.min(Math.max(firstRoundSeconds || 15, 5), 20);
-    laterRoundDuration[roomCode] = Math.min(Math.max(laterRoundSeconds || 8, 3), 15);
+    const settings = sanitizeSettings({ winsRequired: reqWins, mode, speed, roundGap, firstRoundSeconds, laterRoundSeconds });
+    winsRequired[roomCode] = settings.winsRequired;
+    gameMode[roomCode] = settings.mode;
+    gameSpeed[roomCode] = settings.speed;
+    roundGapSeconds[roomCode] = settings.roundGap;
+    firstRoundDuration[roomCode] = settings.firstRoundSeconds;
+    laterRoundDuration[roomCode] = settings.laterRoundSeconds;
     gameWins[roomCode] = {};
     symbolStatsByRoom[roomCode] = {};
     heartsByRoom[roomCode] = {};
@@ -894,7 +990,7 @@ io.on('connection', (socket: AuthenticatedSocket) => {
     startReadyCheck(roomCode, 'game-start');
   });
 
-  socket.on('ready:submit', ({ roomCode }: { roomCode: string }) => {
+  onEvent(socket, 'ready:submit', ({ roomCode }) => {
     if (!socket.userId) return;
     if (!awaitingReady[roomCode]) return;
     if (!roomPlayers[roomCode]?.some(p => p.userId === socket.userId)) return;
@@ -909,7 +1005,7 @@ io.on('connection', (socket: AuthenticatedSocket) => {
     checkAllReady(roomCode);
   });
 
-  socket.on('ready:cancel', ({ roomCode }: { roomCode: string }) => {
+  onEvent(socket, 'ready:cancel', ({ roomCode }) => {
     if (!socket.userId) return;
     if (!awaitingReady[roomCode]) return;
 
@@ -920,9 +1016,7 @@ io.on('connection', (socket: AuthenticatedSocket) => {
     io.to(roomCode).emit('ready:status', { readyNames, total: players.length });
   });
 
-  socket.on('game:replay', async ({ roomCode, autoStart, mode, winsRequired: reqWins }: {
-    roomCode: string; autoStart: boolean; mode?: 'classic' | 'extended'; winsRequired?: number;
-  }) => {
+  onEvent(socket, 'game:replay', async ({ roomCode, autoStart, mode, winsRequired: reqWins }) => {
     const players = roomPlayers[roomCode];
     if (!players) {
       socket.emit('error:message', { message: 'Huonetta ei löytynyt palvelimelta' });
@@ -974,14 +1068,14 @@ io.on('connection', (socket: AuthenticatedSocket) => {
     }
   });
 
-  socket.on('pick:submit', ({ roomCode, symbol }: { roomCode: string; symbol: string }) => {
+  onEvent(socket, 'pick:submit', ({ roomCode, symbol }) => {
     if (!socket.userId) return;
     submitPick(roomCode, socket.userId, symbol);
   });
 
   // Tauko pysäyttää pelin aina kaikilta; peli jatkuu kun kaikki ovat kuitanneet olevansa valmiita.
   // Kesken kierroksen pysäytetty kierros aloitetaan tauon jälkeen alusta (valintoja ei paljasteta).
-  socket.on('game:pauseToggle', ({ roomCode }: { roomCode: string }) => {
+  onEvent(socket, 'game:pauseToggle', ({ roomCode }) => {
     const players = roomPlayers[roomCode];
     if (!players || !socket.userId) return;
     const player = players.find(p => p.userId === socket.userId);
@@ -1037,5 +1131,17 @@ io.on('connection', (socket: AuthenticatedSocket) => {
   });
 });
 
+// Odottamaton virhe kirjataan lokiin sen sijaan että koko palvelin kaatuisi
+process.on('unhandledRejection', err => console.error('Käsittelemätön virhe:', err));
+process.on('uncaughtException', err => console.error('Odottamaton virhe:', err));
+
 const PORT = process.env.PORT || 3001;
 httpServer.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
+// Hallittu sammutus (esim. Render julkaisee uuden version): suljetaan yhteydet siististi
+process.on('SIGTERM', () => {
+  console.log('SIGTERM: sammutetaan palvelin');
+  io.close();
+  httpServer.close(() => pool.end().finally(() => process.exit(0)));
+  setTimeout(() => process.exit(0), 8000).unref();
+});

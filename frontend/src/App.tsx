@@ -5,6 +5,8 @@ import Login from './pages/Login';
 import Lobby from './pages/Lobby';
 import Room from './pages/Room';
 import Profile from './pages/Profile';
+import Privacy from './pages/Privacy';
+import ErrorBoundary from './components/ErrorBoundary';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { token } = useAuth();
@@ -42,6 +44,7 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       />
+      <Route path="/tietosuoja" element={<Privacy />} />
       <Route path="*" element={<Navigate to="/login" />} />
     </Routes>
   );
@@ -49,11 +52,13 @@ function AppRoutes() {
 
 function App() {
   return (
-    <AuthProvider>
-      <BrowserRouter>
-        <AppRoutes />
-      </BrowserRouter>
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <BrowserRouter>
+          <AppRoutes />
+        </BrowserRouter>
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }
 
