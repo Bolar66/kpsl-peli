@@ -8,6 +8,7 @@ import Avatar from '../components/Avatar';
 import ProfileEditor from '../components/ProfileEditor';
 import Modal from '../components/Modal';
 import { MODE_LABEL, SYMBOL_INFO, SYMBOLS_BY_MODE } from '../constants/symbols';
+import { setThemePreference, useThemePreference, type ThemePreference } from '../constants/theme';
 import './Lobby.css';
 import './Profile.css';
 
@@ -38,8 +39,15 @@ function summarize(stats: ProfileStats, view: StatsView, opponents: OpponentView
   };
 }
 
+const THEME_OPTIONS: { value: ThemePreference; label: string }[] = [
+  { value: 'system', label: 'Automaattinen' },
+  { value: 'dark', label: 'Tumma' },
+  { value: 'light', label: 'Vaalea' },
+];
+
 export default function Profile() {
   const { token, user, setAuth, logout } = useAuth();
+  const theme = useThemePreference();
   const navigate = useNavigate();
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [stats, setStats] = useState<ProfileStats | null>(null);
@@ -276,6 +284,25 @@ export default function Profile() {
         )}
 
         {!stats && !error && <p className="muted">Ladataan…</p>}
+
+        <section className="card theme-card">
+          <div className="section-head"><h2>Ulkoasu</h2></div>
+          <div className="seg" role="radiogroup" aria-label="Teema">
+            {THEME_OPTIONS.map(o => (
+              <button
+                key={o.value}
+                type="button"
+                role="radio"
+                aria-checked={theme === o.value}
+                className={theme === o.value ? 'active' : ''}
+                onClick={() => setThemePreference(o.value)}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
+          <p className="faint theme-note">Automaattinen seuraa puhelimen tumma/vaalea-asetusta.</p>
+        </section>
 
         <section className="profile-actions">
           {profile && !profile.isGuest && (

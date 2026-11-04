@@ -19,6 +19,29 @@
   --warn: #FFB547;
   --warn-soft: rgba(255, 181, 71, 0.12);
 
+  /* Korostusväri tekstinä ja viivoina: tummassa sama kuin --accent, vaaleassa tummempi luettavuuden vuoksi */
+  --accent-text: var(--accent);
+  --accent-line: var(--accent);
+  --accent-hover: #E2FF6E;
+  --gold: #FDE68A;
+  --overlay: rgba(5, 5, 6, 0.72);
+  --glass: rgba(11, 11, 12, 0.92);
+  --shadow-color: rgba(0, 0, 0, 0.5);
+  --stripe: rgba(255, 255, 255, 0.025);
+  --winner-tag: rgba(24, 30, 6, 0.95);
+  /* Pelipöytä ja kortit */
+  --felt-1: #18181b;
+  --felt-2: #121214;
+  --felt-3: #0e0e10;
+  --felt-rim: #0f0f11;
+  --card-back-1: #222226;
+  --card-back-2: #18181b;
+  --card-front-1: #26262b;
+  --card-front-2: #1a1a1d;
+  --pick-1: #19191c;
+  --pick-2: #141416;
+  color-scheme: dark;
+
   --font-display: 'Space Grotesk', system-ui, sans-serif;
   --font-body: 'Inter', system-ui, sans-serif;
 
@@ -26,6 +49,46 @@
   --radius: 14px;
   --radius-lg: 22px;
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* Vaalea teema: sama ilme lämpimän valkoisena. Lime toimii täyttönä, tekstinä käytetään tummempaa oliivia. */
+:root[data-theme="light"] {
+  --bg: #F4F4F0;
+  --surface: #FFFFFF;
+  --surface-2: #EFEFEA;
+  --surface-3: #E4E4DE;
+  --border: #E0E0D9;
+  --border-strong: #C6C6BD;
+
+  --text: #121214;
+  --text-2: #55555C;
+  --text-3: #6A6A72;
+
+  --accent-soft: rgba(132, 176, 0, 0.14);
+  --accent-text: #4A6B00;
+  --accent-line: #8CB800;
+  --accent-hover: #C6F21C;
+  --danger: #D63232;
+  --danger-soft: rgba(214, 50, 50, 0.1);
+  --warn: #A86200;
+  --warn-soft: rgba(200, 120, 0, 0.12);
+  --gold: #8A5F00;
+  --overlay: rgba(28, 28, 24, 0.4);
+  --glass: rgba(255, 255, 255, 0.95);
+  --shadow-color: rgba(40, 40, 30, 0.16);
+  --stripe: rgba(0, 0, 0, 0.03);
+  --winner-tag: #F2FAD4;
+  --felt-1: #FFFFFF;
+  --felt-2: #F6F7F1;
+  --felt-3: #ECEEE5;
+  --felt-rim: #E6E8DF;
+  --card-back-1: #FFFFFF;
+  --card-back-2: #EEEEE8;
+  --card-front-1: #FFFFFF;
+  --card-front-2: #F3F3EE;
+  --pick-1: #FFFFFF;
+  --pick-2: #F7F7F3;
+  color-scheme: light;
 }
 
 * { box-sizing: border-box; }
@@ -72,10 +135,10 @@ button { font: inherit; color: inherit; }
 }
 .btn:active { transform: scale(0.97); }
 .btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
-.btn:focus-visible, .seg button:focus-visible, .icon-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.btn:focus-visible, .seg button:focus-visible, .icon-btn:focus-visible { outline: 2px solid var(--accent-line); outline-offset: 2px; }
 
 .btn-primary { background: var(--accent); color: var(--accent-ink); }
-.btn-primary:hover:not(:disabled) { background: #E2FF6E; }
+.btn-primary:hover:not(:disabled) { background: var(--accent-hover); }
 
 .btn-secondary { background: var(--surface-2); color: var(--text); border-color: var(--border); }
 .btn-secondary:hover:not(:disabled) { border-color: var(--border-strong); }
@@ -122,7 +185,7 @@ button { font: inherit; color: inherit; }
   transition: border-color 0.15s ease;
 }
 .input::placeholder { color: var(--text-3); }
-.input:focus { outline: none; border-color: var(--accent); }
+.input:focus { outline: none; border-color: var(--accent-line); }
 
 /* Segmenttivalitsin (esim. Klassinen | Spock) */
 .seg {
@@ -179,7 +242,7 @@ button { font: inherit; color: inherit; }
 }
 .alert-danger { background: var(--danger-soft); color: var(--danger); }
 .alert-warn { background: var(--warn-soft); color: var(--warn); }
-.alert-success { background: var(--accent-soft); color: var(--accent); }
+.alert-success { background: var(--accent-soft); color: var(--accent-text); }
 
 .wordmark {
   font-family: var(--font-display);
@@ -187,7 +250,7 @@ button { font: inherit; color: inherit; }
   font-size: 20px;
   letter-spacing: -0.02em;
 }
-.wordmark span { color: var(--accent); }
+.wordmark span { color: var(--accent-text); }
 .bowl-logo { display: inline-flex; align-items: center; gap: 0.35em; }
 .bowl-logo .wordmark { font-size: inherit; letter-spacing: 0.02em; }
 
@@ -208,7 +271,7 @@ button { font: inherit; color: inherit; }
 .overlay {
   position: fixed;
   inset: 0;
-  background: rgba(5, 5, 6, 0.72);
+  background: var(--overlay);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
   display: flex;
@@ -312,7 +375,7 @@ button { font: inherit; color: inherit; }
   cursor: pointer;
   padding: 6px;
 }
-.feedback-link span { color: var(--accent); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+.feedback-link span { color: var(--accent-text); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
 .feedback-form { display: flex; flex-direction: column; gap: 12px; }
 .feedback-form .sheet-title, .feedback-form .sheet-sub { margin: 0; }
 .feedback-text { min-height: 110px; resize: vertical; font: inherit; line-height: 1.4; padding-top: 10px; }

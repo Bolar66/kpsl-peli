@@ -81,7 +81,7 @@
   font-family: var(--font-display);
   font-size: 28px;
   font-weight: 700;
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .share-btn { min-height: 44px; padding: 0 16px; }
 
@@ -101,9 +101,9 @@
 }
 .slot-empty { border: 1px dashed var(--border-strong); }
 .slot-add {
-  border: 1px dashed var(--accent);
+  border: 1px dashed var(--accent-line);
   background: var(--accent-soft);
-  color: var(--accent);
+  color: var(--accent-text);
   font-size: 24px;
   cursor: pointer;
   transition: transform 0.15s var(--ease);
@@ -112,7 +112,7 @@
 .slot-crown { position: absolute; top: -10px; right: -4px; font-size: 16px; transform: rotate(18deg); }
 .slot-avatar .remove-bot { position: absolute; top: -6px; right: -6px; width: 22px; height: 22px; font-size: 14px; background: var(--surface-2); }
 .slot-name { font-size: 12px; font-weight: 500; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.slot-name.me { color: var(--accent); font-weight: 600; }
+.slot-name.me { color: var(--accent-text); font-weight: 600; }
 
 .setting-grid { display: grid; grid-template-columns: auto 1fr; gap: 12px; align-items: end; }
 .section-head { display: flex; align-items: baseline; justify-content: space-between; }
@@ -156,7 +156,7 @@
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: var(--accent);
+  color: var(--accent-text);
   background: var(--accent-soft);
   border-radius: 999px;
   padding: 3px 8px;
@@ -279,13 +279,13 @@
   position: absolute;
   background:
     radial-gradient(ellipse 70% 55% at 50% 45%, rgba(212, 255, 58, 0.06), transparent 70%),
-    radial-gradient(ellipse at 50% 50%, #18181b 0%, #121214 60%, #0e0e10 100%);
+    radial-gradient(ellipse at 50% 50%, var(--felt-1) 0%, var(--felt-2) 60%, var(--felt-3) 100%);
   border: 1px solid var(--border-strong);
   box-shadow:
-    inset 0 0 0 8px #0f0f11,
+    inset 0 0 0 8px var(--felt-rim),
     inset 0 0 0 9px var(--border),
-    inset 0 20px 50px rgba(0, 0, 0, 0.45),
-    0 24px 60px rgba(0, 0, 0, 0.55);
+    inset 0 20px 50px var(--shadow-color),
+    0 24px 60px var(--shadow-color);
 }
 
 .table-glow {
@@ -394,34 +394,34 @@
 
 .play-card-face.back {
   background:
-    repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.025) 0 5px, transparent 5px 10px),
-    linear-gradient(160deg, #222226, #18181b);
+    repeating-linear-gradient(45deg, var(--stripe) 0 5px, transparent 5px 10px),
+    linear-gradient(160deg, var(--card-back-1), var(--card-back-2));
   border: 1px solid var(--border-strong);
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 6px 16px var(--shadow-color);
 }
 .play-card.thinking .back { border-style: dashed; }
 .play-card.locked .back {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-soft), 0 0 22px rgba(212, 255, 58, 0.22), 0 6px 16px rgba(0, 0, 0, 0.45);
+  border-color: var(--accent-line);
+  box-shadow: 0 0 0 3px var(--accent-soft), 0 0 22px rgba(212, 255, 58, 0.22), 0 6px 16px var(--shadow-color);
 }
 .play-card.dnf .back { opacity: 0.45; }
 
 .play-card-face.front {
   transform: rotateY(180deg);
-  background: linear-gradient(160deg, #26262b, #1a1a1d);
+  background: linear-gradient(160deg, var(--card-front-1), var(--card-front-2));
   border: 1px solid var(--border-strong);
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 8px 20px var(--shadow-color);
 }
 .play-card.winner .front {
-  border-color: var(--accent);
+  border-color: var(--accent-line);
   box-shadow: 0 0 0 3px var(--accent-soft), 0 0 30px rgba(212, 255, 58, 0.4);
 }
 .play-card.lost .front { opacity: 0.45; filter: grayscale(0.7); }
 
 .card-emoji { font-size: 30px; line-height: 1; }
 .card-label { font-size: 10px; font-weight: 600; color: var(--text-2); }
-.play-card.winner .card-label { color: var(--accent); }
-.card-mark { font-size: 22px; color: var(--accent); font-weight: 700; }
+.play-card.winner .card-label { color: var(--accent-text); }
+.card-mark { font-size: 22px; color: var(--accent-text); font-weight: 700; }
 .card-dnf { font-size: 22px; }
 
 .thinking-dots { display: flex; gap: 4px; }
@@ -444,7 +444,7 @@
   margin: -3px;
   border-radius: 50%;
   background: var(--accent);
-  box-shadow: 0 0 8px var(--accent);
+  box-shadow: 0 0 8px var(--accent-line);
 }
 
 /* Pelaajien paikat pöydän ympärillä (ankkuroitu avatarin keskelle) */
@@ -492,7 +492,7 @@
 
 .wins-ring { position: absolute; inset: 0; }
 .wins-ring circle { stroke: var(--surface-3); transition: stroke 0.4s ease; }
-.wins-ring circle.won { stroke: var(--accent); }
+.wins-ring circle.won { stroke: var(--accent-line); }
 
 .plus-one {
   position: absolute;
@@ -500,7 +500,7 @@
   font-family: var(--font-display);
   font-weight: 700;
   font-size: 18px;
-  color: var(--accent);
+  color: var(--accent-text);
   text-shadow: 0 0 12px rgba(212, 255, 58, 0.6);
   pointer-events: none;
 }
@@ -515,7 +515,7 @@
   margin-top: 2px;
   padding: 3px 9px 4px;
   border-radius: 10px;
-  background: rgba(11, 11, 12, 0.92);
+  background: var(--glass);
   border: 1px solid var(--border);
 }
 .seat-name {
@@ -527,7 +527,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.seat.me .seat-name { color: var(--accent); }
+.seat.me .seat-name { color: var(--accent-text); }
 .seat-meta { height: 6px; display: flex; align-items: center; }
 .seat-status { font-size: 10px; color: var(--warn); }
 
@@ -543,7 +543,7 @@
   padding: 2px 8px 0;
 }
 .status-line.warn { color: var(--warn); }
-.status-line.accent { color: var(--accent); }
+.status-line.accent { color: var(--accent-text); }
 
 /* Valintanapit */
 .pick-dock {
@@ -565,7 +565,7 @@
   gap: 4px;
   min-height: 84px;
   border-radius: var(--radius);
-  background: linear-gradient(180deg, #19191c, #141416);
+  background: linear-gradient(180deg, var(--pick-1), var(--pick-2));
   border: 1px solid var(--border);
   cursor: pointer;
   transition: border-color 0.15s ease, background 0.15s ease, opacity 0.25s ease, transform 0.2s var(--ease), box-shadow 0.2s ease;
@@ -573,12 +573,12 @@
 .picks-5 .pick { min-height: 76px; }
 .pick:hover:not(:disabled) { border-color: var(--border-strong); }
 .pick.picked {
-  border-color: var(--accent);
+  border-color: var(--accent-line);
   background: linear-gradient(180deg, rgba(212, 255, 58, 0.14), rgba(212, 255, 58, 0.04));
   box-shadow: 0 0 24px rgba(212, 255, 58, 0.18);
   transform: translateY(-4px);
 }
-.pick.picked .pick-label { color: var(--accent); }
+.pick.picked .pick-label { color: var(--accent-text); }
 .pick.dimmed { opacity: 0.25; transform: scale(0.96); }
 .pick.inactive { opacity: 0.45; }
 .pick:disabled { cursor: default; }
@@ -596,16 +596,16 @@
   gap: 2px;
   padding: 10px 12px;
   border-radius: var(--radius);
-  background: rgba(14, 14, 16, 0.92);
+  background: var(--glass);
   border: 1px solid var(--border-strong);
   text-align: center;
   width: max-content;
   max-width: 150px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 10px 30px var(--shadow-color);
 }
-.round-banner.won { border-color: var(--accent); box-shadow: 0 0 30px rgba(212, 255, 58, 0.2); }
+.round-banner.won { border-color: var(--accent-line); box-shadow: 0 0 30px rgba(212, 255, 58, 0.2); }
 .round-banner-title { font-family: var(--font-display); font-size: 16px; font-weight: 700; line-height: 1.2; }
-.round-banner.won .round-banner-title { color: var(--accent); }
+.round-banner.won .round-banner-title { color: var(--accent-text); }
 .round-banner-sub { font-size: 11px; color: var(--text-2); }
 
 /* Matalat näytöt: pienennetään kortteja ja nappeja */
@@ -637,7 +637,7 @@
 .ready-list li { display: flex; align-items: center; gap: 10px; font-size: 14px; }
 .ready-name { flex: 1; font-weight: 500; }
 .ready-state { font-size: 13px; color: var(--text-3); }
-.ready-list li.ready .ready-state { color: var(--accent); font-weight: 600; }
+.ready-list li.ready .ready-state { color: var(--accent-text); font-weight: 600; }
 
 .trophy { font-size: 56px; text-align: center; line-height: 1; filter: grayscale(0.6); }
 .trophy.won { filter: none; }
@@ -652,11 +652,11 @@
   background: var(--surface-2);
   font-size: 15px;
 }
-.standings li.first { box-shadow: inset 0 0 0 1px var(--accent); }
+.standings li.first { box-shadow: inset 0 0 0 1px var(--accent-line); }
 .standing-pos { font-family: var(--font-display); color: var(--text-3); width: 16px; }
 .standing-name { flex: 1; font-weight: 500; }
 .standing-wins { font-family: var(--font-display); font-weight: 700; font-size: 18px; }
-.standings li.first .standing-wins { color: var(--accent); }
+.standings li.first .standing-wins { color: var(--accent-text); }
 
 .ready-rules { display: flex; flex-direction: column; gap: 10px; border-top: 1px solid var(--border); padding-top: 16px; }
 
@@ -728,7 +728,7 @@
   position: absolute;
   inset: -3px;
   border-radius: 14px;
-  border: 2px solid var(--accent);
+  border: 2px solid var(--accent-line);
   opacity: 0;
   pointer-events: none;
   animation: shockwave 0.9s ease-out 0.5s;
@@ -745,13 +745,13 @@
   left: -8px;
   padding: 2px 5px;
   border-radius: 999px;
-  background: rgba(11, 11, 12, 0.92);
+  background: var(--glass);
   border: 1px solid rgba(255, 181, 71, 0.5);
   display: inline-block;
   font-size: 11px;
   font-weight: 800;
   line-height: 1;
-  color: #FFB547;
+  color: var(--warn);
   text-shadow: 0 0 10px rgba(255, 140, 40, 0.6);
 }
 
@@ -792,7 +792,7 @@
   color: var(--text-2);
 }
 .seat-wins small { font-size: 9px; color: var(--text-3); font-weight: 600; }
-.seat-wins.has { color: var(--accent); }
+.seat-wins.has { color: var(--accent-text); }
 
 .spotlight {
   position: absolute;
@@ -808,16 +808,16 @@
 .seat { transition: opacity 0.4s ease, filter 0.4s ease; }
 .seat.loser { opacity: 0.45; filter: grayscale(0.7); }
 .seat.winner .seat-avatar { animation: winner-bounce 0.7s cubic-bezier(0.3, 1.6, 0.5, 1) 0.5s both; }
-.seat.winner .seat-avatar .avatar-img { box-shadow: 0 0 0 3px var(--accent), 0 0 26px rgba(212, 255, 58, 0.7); animation: winner-glow 1.2s ease-in-out 1.1s infinite alternate; }
-.seat.winner .seat-tag { border-color: var(--accent); background: rgba(24, 30, 6, 0.95); }
-.seat.winner .seat-name { color: var(--accent); }
+.seat.winner .seat-avatar .avatar-img { box-shadow: 0 0 0 3px var(--accent-line), 0 0 26px rgba(212, 255, 58, 0.7); animation: winner-glow 1.2s ease-in-out 1.1s infinite alternate; }
+.seat.winner .seat-tag { border-color: var(--accent-line); background: var(--winner-tag); }
+.seat.winner .seat-name { color: var(--accent-text); }
 @keyframes winner-bounce {
   0% { transform: scale(1); }
   40% { transform: scale(1.22); }
   100% { transform: scale(1.08); }
 }
 @keyframes winner-glow {
-  to { box-shadow: 0 0 0 3px var(--accent), 0 0 40px rgba(212, 255, 58, 0.95); }
+  to { box-shadow: 0 0 0 3px var(--accent-line), 0 0 40px rgba(212, 255, 58, 0.95); }
 }
 
 /* Voitetut kokonaiset pelit tässä huoneessa */
@@ -827,12 +827,12 @@
   right: -10px;
   padding: 2px 5px;
   border-radius: 999px;
-  background: rgba(11, 11, 12, 0.92);
+  background: var(--glass);
   border: 1px solid rgba(253, 230, 138, 0.6);
   font-size: 11px;
   font-weight: 800;
   line-height: 1;
-  color: #FDE68A;
+  color: var(--gold);
   white-space: nowrap;
   z-index: 2;
 }
@@ -850,7 +850,7 @@
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
-.standing-match { font-size: 13px; color: #FDE68A; font-weight: 700; margin-right: 6px; }
+.standing-match { font-size: 13px; color: var(--gold); font-weight: 700; margin-right: 6px; }
 
 /* ---------- Piilotettu yllätys ---------- */
 .trophy { cursor: default; user-select: none; -webkit-user-select: none; }
@@ -885,13 +885,13 @@
   padding: 6px 10px;
   border-radius: 14px;
   background: var(--text);
-  color: var(--accent-ink);
+  color: var(--bg);
   font-size: 13px;
   font-weight: 600;
   line-height: 1.25;
   text-align: left;
   overflow-wrap: anywhere;
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 6px 18px var(--shadow-color);
   pointer-events: none;
 }
 .chat-bubble.emote {
@@ -900,7 +900,7 @@
   padding: 0;
   font-size: 48px;
   line-height: 1;
-  filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.55));
+  filter: drop-shadow(0 6px 10px var(--shadow-color));
 }
 .chat-bubble-text { position: relative; }
 /* Emoten takaa laajeneva valorengas ja ylös leijuvat pienet kopiot */
@@ -911,7 +911,7 @@
   height: 56px;
   margin: -28px 0 0 -28px;
   border-radius: 50%;
-  border: 2px solid var(--accent);
+  border: 2px solid var(--accent-line);
   opacity: 0;
   animation: emote-ring 0.7s 0.1s ease-out;
 }

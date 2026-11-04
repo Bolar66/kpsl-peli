@@ -1,11 +1,11 @@
 const NODE_RADIUS = 24;
 
 const NODES = [
-  { key: 'rock', label: 'Kivi', emoji: '✊', color: '#D4FF3A' },
-  { key: 'spock', label: 'Spock', emoji: '🖖', color: '#D4FF3A' },
-  { key: 'paper', label: 'Paperi', emoji: '✋', color: '#D4FF3A' },
-  { key: 'lizard', label: 'Lisko', emoji: '🦎', color: '#D4FF3A' },
-  { key: 'scissors', label: 'Sakset', emoji: '✌️', color: '#D4FF3A' },
+  { key: 'rock', label: 'Kivi', emoji: '✊', color: 'var(--accent-line)' },
+  { key: 'spock', label: 'Spock', emoji: '🖖', color: 'var(--accent-line)' },
+  { key: 'paper', label: 'Paperi', emoji: '✋', color: 'var(--accent-line)' },
+  { key: 'lizard', label: 'Lisko', emoji: '🦎', color: 'var(--accent-line)' },
+  { key: 'scissors', label: 'Sakset', emoji: '✌️', color: 'var(--accent-line)' },
 ];
 
 const EDGES: [string, string][] = [
@@ -75,9 +75,9 @@ export default function KpslDiagram() {
 
         return (
           <g key={n.key}>
-            <circle cx={pos.x} cy={pos.y} r={NODE_RADIUS} fill="#1C1C1F" stroke="#3A3A40" strokeWidth="1" />
+            <circle cx={pos.x} cy={pos.y} r={NODE_RADIUS} style={{ fill: 'var(--surface-2)', stroke: 'var(--border-strong)' }} strokeWidth="1" />
             <text x={pos.x} y={pos.y + 6} textAnchor="middle" fontSize="18">{n.emoji}</text>
-            <text x={labelX} y={labelY} textAnchor="middle" fontSize="11" fill="#A1A1AA" fontFamily="Inter, sans-serif">
+            <text x={labelX} y={labelY} textAnchor="middle" fontSize="11" style={{ fill: 'var(--text-2)' }} fontFamily="Inter, sans-serif">
               {n.label}
             </text>
           </g>

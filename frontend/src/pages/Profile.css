@@ -8,7 +8,7 @@
 }
 .profile-hero h1 { font-size: 26px; }
 
-.guest-card { display: flex; flex-direction: column; gap: 12px; border-color: var(--accent); }
+.card.guest-card { display: flex; flex-direction: column; gap: 12px; border-color: var(--accent-line); }
 .guest-card .muted { font-size: 14px; }
 
 .stat-grid {
@@ -28,7 +28,7 @@
   gap: 2px;
 }
 .stat-num { font-family: var(--font-display); font-size: 26px; font-weight: 700; line-height: 1.1; }
-.stat-num.accent { color: var(--accent); }
+.stat-num.accent { color: var(--accent-text); }
 .stat-label { font-size: 12px; color: var(--text-2); }
 
 .card > .section-head { margin-bottom: 14px; }
@@ -61,7 +61,7 @@
   width: 64px;
   text-align: center;
 }
-.result-pill.won { background: var(--accent-soft); color: var(--accent); }
+.result-pill.won { background: var(--accent-soft); color: var(--accent-text); }
 
 .profile-actions { display: flex; flex-direction: column; gap: 8px; padding-top: 8px; }
 
@@ -81,7 +81,7 @@
   font-family: var(--font-display);
   font-weight: 700;
 }
-.emoji-opt.active { border-color: var(--accent); background: var(--accent-soft); }
+.emoji-opt.active { border-color: var(--accent-line); background: var(--accent-soft); }
 
 .color-row { display: flex; gap: 10px; flex-wrap: wrap; }
 .color-opt {
@@ -112,5 +112,9 @@
 .opponent-rank { font-size: 18px; width: 22px; text-align: center; }
 .opponent-name { flex: 1; font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .opponent-score { font-size: 13px; color: var(--text-2); white-space: nowrap; }
-.opponent-score b { color: var(--accent); font-family: var(--font-display); font-size: 16px; }
+.opponent-score b { color: var(--accent-text); font-family: var(--font-display); font-size: 16px; }
 .seg + .seg { margin-top: -6px; }
+
+.theme-card { display: flex; flex-direction: column; gap: 12px; }
+.theme-note { margin: 0; font-size: 12px; }
+.card.theme-card > .section-head { margin-bottom: 0; }

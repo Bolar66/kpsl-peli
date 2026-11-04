@@ -21,7 +21,7 @@ export default function CountdownRing({ countdown, endsAt, totalMs }: CountdownR
   const urgent = countdown <= 3;
   // Viimeiset sekunnit huudetaan kuin oikeassa pelissä: kivi… paperi… sakset!
   const chant = CHANT[countdown];
-  const color = urgent ? 'var(--danger)' : 'var(--accent)';
+  const color = urgent ? 'var(--danger)' : 'var(--accent-line)';
 
   // Rengas päivitetään joka ruudunpäivityksellä suoraan DOMiin. Kun aika lyhenee yhtäkkiä
   // (kaikki valitsivat), rengas liukuu pehmeästi uuteen kohtaan eikä hyppää.

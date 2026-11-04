@@ -4,6 +4,16 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#0B0B0C" />
+    <!-- Teema asetetaan heti, ettei sivu välähdä väärän värisenä (sama logiikka kuin src/constants/theme.ts) -->
+    <script>
+      (function () {
+        var pref = 'system';
+        try { pref = localStorage.getItem('bowl-theme') || 'system'; } catch (e) {}
+        var theme = pref === 'light' || pref === 'dark' ? pref : (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+        document.documentElement.dataset.theme = theme;
+        if (theme === 'light') document.querySelector('meta[name="theme-color"]').setAttribute('content', '#F4F4F0');
+      })();
+    </script>
     <title>BOWL — pelejä kavereiden kanssa</title>
     <meta name="description" content="Pelejä kavereiden kanssa reaaliajassa: kivi, paperi, sakset ja Lisko–Spock, lisää tulossa. Luo huone, jaa koodi ja pelaa." />
 
