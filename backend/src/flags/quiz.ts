@@ -14,6 +14,8 @@ export const LEVEL_LABEL: Record<QuizLevel, string> = {
   lottery: 'Arpajaiset',
 };
 
+type OptionStyle = 'far' | 'mixed' | 'similar';
+
 interface LevelConfig {
   // Kuinka suuri osa kysymyksistä tulee kustakin tasosta (1 = tunnetuimmat … 4 = alueet)
   tierWeights: Record<1 | 2 | 3 | 4, number>;
@@ -21,13 +23,16 @@ interface LevelConfig {
   choiceShare: number;
   // Lisätavat, jotka tasolla voi olla päällä (Maailmanmatkaajassa vastaus kirjoitetaan aina)
   allowedExtras: Extra[];
+  // Väärät vaihtoehdot: far = eri maanosista, mixed = mistä tahansa mutta ei samannäköisiä,
+  // similar = ensisijaisesti samannäköiset liput (vain vaikeimmilla tasoilla)
+  options: OptionStyle;
 }
 
 const LEVELS: Record<QuizLevel, LevelConfig> = {
-  tourist: { tierWeights: { 1: 1, 2: 0, 3: 0, 4: 0 }, choiceShare: 1, allowedExtras: ['flagChoice', 'reveal', 'piece', 'trueFalse'] },
-  backpacker: { tierWeights: { 1: 0.45, 2: 0.55, 3: 0, 4: 0 }, choiceShare: 0.5, allowedExtras: ['flagChoice', 'reveal', 'piece', 'trueFalse'] },
-  globetrotter: { tierWeights: { 1: 0, 2: 0.4, 3: 0.4, 4: 0.2 }, choiceShare: 0, allowedExtras: ['reveal', 'piece'] },
-  lottery: { tierWeights: { 1: 0.25, 2: 0.3, 3: 0.3, 4: 0.15 }, choiceShare: 0.5, allowedExtras: ['flagChoice', 'reveal', 'piece', 'trueFalse'] },
+  tourist: { tierWeights: { 1: 1, 2: 0, 3: 0, 4: 0 }, choiceShare: 1, allowedExtras: ['flagChoice', 'reveal', 'piece', 'trueFalse'], options: 'far' },
+  backpacker: { tierWeights: { 1: 0.45, 2: 0.55, 3: 0, 4: 0 }, choiceShare: 0.5, allowedExtras: ['flagChoice', 'reveal', 'piece', 'trueFalse'], options: 'mixed' },
+  globetrotter: { tierWeights: { 1: 0, 2: 0.4, 3: 0.4, 4: 0.2 }, choiceShare: 0, allowedExtras: ['reveal', 'piece'], options: 'similar' },
+  lottery: { tierWeights: { 1: 0.25, 2: 0.3, 3: 0.3, 4: 0.15 }, choiceShare: 0.5, allowedExtras: ['flagChoice', 'reveal', 'piece', 'trueFalse'], options: 'similar' },
 };
 
 export const DEFAULT_EXTRAS: Record<QuizLevel, Extra[]> = {
@@ -159,8 +164,9 @@ export interface Question {
   timeMs: number;
 }
 
-// Väärät vaihtoehdot: ensin samannäköiset liput, sitten saman maanosan maat, lopuksi mitä tahansa
-function distractors(code: string, pool: Country[], count: number): string[] {
+// Väärät vaihtoehdot. Vaikeilla tasoilla ensin samannäköiset liput, sitten saman maanosan maat.
+// Helpoilla tasoilla samannäköiset jätetään pois ja vaihtoehdot arvotaan eri puolilta maailmaa.
+function distractors(code: string, pool: Country[], count: number, style: OptionStyle): string[] {
   const country = countryByCode(code);
   const poolCodes = new Set(pool.map(c => c.code));
   const chosen = new Set<string>();
@@ -170,9 +176,16 @@ function distractors(code: string, pool: Country[], count: number): string[] {
       if (c !== code && poolCodes.has(c)) chosen.add(c);
     }
   };
-  add(LOOKALIKES.filter(group => group.includes(code)).flat());
-  add(pool.filter(c => c.continent === country.continent).map(c => c.code));
-  add(pool.map(c => c.code));
+  const similar = new Set(LOOKALIKES.filter(group => group.includes(code)).flat());
+  if (style === 'similar') {
+    add([...similar]);
+    add(pool.filter(c => c.continent === country.continent).map(c => c.code));
+    add(pool.map(c => c.code));
+  } else {
+    const distinct = pool.filter(c => !similar.has(c.code));
+    if (style === 'far') add(distinct.filter(c => c.continent !== country.continent).map(c => c.code));
+    add(distinct.map(c => c.code));
+  }
   return [...chosen].slice(0, count);
 }
 
@@ -233,10 +246,10 @@ export function generateQuestions(level: QuizLevel, count: number, extras: Extra
 
     const question: Question = { code: country.code, kind, display, timeMs: timeFor(kind, times) + (display !== 'normal' ? REVEAL_EXTRA_MS : 0) };
     if (kind === 'choice' || kind === 'flagChoice') {
-      question.options = shuffle([country.code, ...distractors(country.code, optionPool, 3)]);
+      question.options = shuffle([country.code, ...distractors(country.code, optionPool, 3, config.options)]);
     }
     if (kind === 'trueFalse') {
-      question.claim = Math.random() < 0.5 ? country.code : (distractors(country.code, optionPool, 1)[0] ?? country.code);
+      question.claim = Math.random() < 0.5 ? country.code : (distractors(country.code, optionPool, 1, config.options)[0] ?? country.code);
     }
     return question;
   });
