@@ -462,7 +462,7 @@ export default function Room() {
   }
   function handleExit() {
     socket?.emit('room:leave', { roomCode });
-    navigate('/lobby');
+    navigate('/kpsl');
   }
   function handleReadySubmit() {
     socket?.emit('ready:submit', { roomCode });
@@ -482,7 +482,7 @@ export default function Room() {
             <div className="rejected-icon" aria-hidden="true">🚪</div>
             <h1>Huoneeseen {roomCode} ei pääse</h1>
             <p className="muted">{joinRejected}</p>
-            <button className="btn btn-primary btn-block" onClick={() => navigate('/lobby')}>Takaisin etusivulle</button>
+            <button className="btn btn-primary btn-block" onClick={() => navigate('/kpsl')}>Takaisin etusivulle</button>
           </div>
         </div>
       </div>

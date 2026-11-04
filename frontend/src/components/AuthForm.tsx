@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { BowlMark } from './BowlLogo';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { login, playAsGuest, register, requestPasswordReset } from '../api/auth';
@@ -30,7 +31,7 @@ export default function AuthForm({ initialMode }: AuthFormProps) {
   const navigate = useNavigate();
   const location = useLocation();
   // Jos käyttäjä avasi huonelinkin kirjautumatta, palataan siihen kirjautumisen jälkeen
-  const from = (location.state as { from?: string } | null)?.from || '/lobby';
+  const from = (location.state as { from?: string } | null)?.from || '/pelit';
   const comingToRoom = from.startsWith('/room/');
 
   useEffect(() => {
@@ -79,12 +80,10 @@ export default function AuthForm({ initialMode }: AuthFormProps) {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4, ease: [0.2, 0.8, 0.2, 1] }}
       >
-        <div className="auth-hands" aria-hidden="true">
-          <span>✊</span><span>✋</span><span>✌️</span><span>🦎</span><span>🖖</span>
-        </div>
-        <div className="wordmark">KPSL<span>.</span></div>
+        <BowlMark size={88} className="auth-mark" />
+        <div className="wordmark">BOWL</div>
         <p className="auth-tagline">
-          {comingToRoom ? 'Sinut on kutsuttu peliin! Valitse nimimerkki niin pääset mukaan.' : 'Kivi, paperi, sakset — tai Lisko–Spock. Kavereiden kanssa, reaaliajassa.'}
+          {comingToRoom ? 'Sinut on kutsuttu peliin! Valitse nimimerkki niin pääset mukaan.' : 'Pelejä kavereiden kanssa, reaaliajassa.'}
         </p>
       </motion.div>
 

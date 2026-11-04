@@ -5,6 +5,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import Register from './pages/Register';
 import Login from './pages/Login';
 import Lobby from './pages/Lobby';
+import GameHub from './pages/GameHub';
 import Room from './pages/Room';
 import Profile from './pages/Profile';
 import Privacy from './pages/Privacy';
@@ -31,7 +32,17 @@ function AppRoutes() {
       <Route path="/register" element={<Register />} />
       <Route path="/login" element={<Login />} />
       <Route
-        path="/lobby"
+        path="/pelit"
+        element={
+          <ProtectedRoute>
+            <GameHub />
+          </ProtectedRoute>
+        }
+      />
+      {/* Vanhat linkit (/lobby) ohjataan KPSL:n aulaan */}
+      <Route path="/lobby" element={<Navigate to="/kpsl" replace />} />
+      <Route
+        path="/kpsl"
         element={
           <ProtectedRoute>
             <Lobby />

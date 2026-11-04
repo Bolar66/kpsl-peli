@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import BowlLogo from '../components/BowlLogo';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { resetPassword } from '../api/auth';
 import './Auth.css';
@@ -31,7 +32,7 @@ export default function ResetPassword() {
 
   return (
     <div className="auth-page">
-      <div className="wordmark" style={{ fontSize: 28 }}>KPSL<span>.</span></div>
+      <BowlLogo size={40} />
       <div className="card auth-card">
         {done ? (
           <>

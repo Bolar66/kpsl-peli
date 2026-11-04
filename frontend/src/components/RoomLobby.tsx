@@ -86,7 +86,7 @@ export default function RoomLobby({
     const text = `Tule pelaamaan ${settings.mode === 'extended' ? 'kivi-paperi-sakset-lisko-Spockia' : 'kivi-paperi-saksia'}! Huonekoodi ${roomCode}`;
     try {
       if (navigator.share && window.matchMedia('(pointer: coarse)').matches) {
-        await navigator.share({ title: 'KPSL', text, url });
+        await navigator.share({ title: 'BOWL', text, url });
         return;
       }
       await navigator.clipboard.writeText(url);

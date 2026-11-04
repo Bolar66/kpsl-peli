@@ -166,7 +166,7 @@ router.post('/forgot', async (req, res) => {
       const link = `${origin}/palauta?token=${token}`;
       await sendMail(
         user.email,
-        'KPSL — salasanan palautus',
+        'BOWL — salasanan palautus',
         `Hei ${user.username}!\n\nVoit asettaa uuden salasanan tästä linkistä (voimassa tunnin):\n${link}\n\nJos et pyytänyt palautusta, voit jättää tämän viestin huomiotta.`
       );
     }

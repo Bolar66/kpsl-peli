@@ -188,6 +188,8 @@ button { font: inherit; color: inherit; }
   letter-spacing: -0.02em;
 }
 .wordmark span { color: var(--accent); }
+.bowl-logo { display: inline-flex; align-items: center; gap: 0.35em; }
+.bowl-logo .wordmark { font-size: inherit; letter-spacing: 0.02em; }
 
 .avatar-img {
   display: inline-flex;

@@ -16,22 +16,7 @@
   text-align: center;
 }
 
-.auth-hands {
-  display: flex;
-  gap: 8px;
-  font-size: 26px;
-}
-.auth-hands span {
-  width: 52px;
-  height: 52px;
-  border-radius: 16px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.auth-hands span:nth-child(3) { border-color: var(--accent); }
+.auth-mark { display: block; }
 
 .auth-hero .wordmark { font-size: 32px; }
 .auth-tagline { color: var(--text-2); font-size: 15px; }

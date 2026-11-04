@@ -1,7 +1,7 @@
 {
-  "name": "KPSL — kivi, paperi, sakset",
-  "short_name": "KPSL",
-  "description": "Kivi, paperi, sakset (ja Lisko–Spock) kavereiden kanssa reaaliajassa.",
+  "name": "BOWL — pelejä kavereiden kanssa",
+  "short_name": "BOWL",
+  "description": "Pelejä kavereiden kanssa reaaliajassa: kivi, paperi, sakset ja lisää tulossa.",
   "lang": "fi",
   "start_url": "/",
   "display": "standalone",

@@ -35,7 +35,7 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
   if (to) {
     sendMail(
       to,
-      `KPSL-palaute: ${CATEGORY_LABEL[category]} (${req.username})`,
+      `BOWL-palaute: ${CATEGORY_LABEL[category]} (${req.username})`,
       `${text}\n\n— ${req.username}\nSivu: ${pagePath ?? '-'}\nLaite: ${userAgent}`
     ).catch(err => console.error('Palautesähköposti epäonnistui', err));
   }

@@ -3,24 +3,17 @@ import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { AuthError, createGame, joinGame } from '../api/games';
-import Avatar from '../components/Avatar';
-import AudioSettingsSheet from '../components/AudioSettings';
-import FeedbackSheet from '../components/FeedbackSheet';
-import InstallHint from '../components/InstallHint';
-import { useAudioSettings } from '../hooks/useAudioSettings';
+import AppHeader from '../components/AppHeader';
 import './Lobby.css';
 
 const ROOM_CODE_CHARS = /[^ABCDEFGHJKLMNPQRSTUVWXYZ23456789]/g;
 
 export default function Lobby() {
-  const { user, token, logout } = useAuth();
+  const { token, logout } = useAuth();
   const [joinCode, setJoinCode] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState<'create' | 'join' | null>(null);
   const navigate = useNavigate();
-  const audioSettings = useAudioSettings();
-  const [audioOpen, setAudioOpen] = useState(false);
-  const [feedbackOpen, setFeedbackOpen] = useState(false);
 
   function handleError(err: unknown) {
     if (err instanceof AuthError) { logout(); return; }
@@ -56,22 +49,13 @@ export default function Lobby() {
 
   return (
     <div className="lobby-page">
-      <header className="topbar">
-        <div className="wordmark">KPSL<span>.</span></div>
-        <div className="topbar-actions">
-        <button className="icon-btn" onClick={() => setAudioOpen(true)} aria-label="Äänet" title="Äänet">
-          {audioSettings.muted ? '🔇' : '🔊'}
-        </button>
-        {user && (
-          <Link to="/profile" className="user-chip" aria-label="Oma profiili">
-            <span className="user-chip-name">{user.username}</span>
-            <Avatar player={{ userId: user.id, username: user.username, avatarEmoji: user.avatarEmoji, avatarColor: user.avatarColor, avatarImage: user.avatarImage }} size={34} />
+      <AppHeader
+        left={
+          <Link to="/pelit" className="back-link" aria-label="Takaisin pelivalikkoon">
+            <span aria-hidden="true">←</span> Pelit
           </Link>
-        )}
-        </div>
-      </header>
-      <AudioSettingsSheet open={audioOpen} onClose={() => setAudioOpen(false)} />
-      <FeedbackSheet open={feedbackOpen} onClose={() => setFeedbackOpen(false)} />
+        }
+      />
 
       <motion.main
         className="lobby-main"
@@ -80,11 +64,9 @@ export default function Lobby() {
         transition={{ duration: 0.4, ease: [0.2, 0.8, 0.2, 1] }}
       >
         <div className="lobby-hero">
-          <h1>Valmiina peliin?</h1>
+          <h1>Kivi, paperi, sakset</h1>
           <p className="muted">Luo huone ja jaa koodi kavereille, tai liity kaverin huoneeseen.</p>
         </div>
-
-        <InstallHint />
 
         {error && <p className="alert alert-danger" role="alert">{error}</p>}
 
@@ -129,9 +111,6 @@ export default function Lobby() {
           <li><span>3</span>Myöhästyminen vie sydämen. Ensin tavoitteeseen voittaa</li>
         </ol>
 
-        <button className="feedback-link" onClick={() => setFeedbackOpen(true)}>
-          Bugi tai idea? <span>Anna palautetta</span>
-        </button>
       </motion.main>
     </div>
   );

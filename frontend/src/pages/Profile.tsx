@@ -121,7 +121,7 @@ export default function Profile() {
   return (
     <div className="lobby-page">
       <header className="topbar">
-        <button className="icon-btn" onClick={() => navigate('/lobby')} aria-label="Takaisin">←</button>
+        <button className="icon-btn" onClick={() => navigate('/pelit')} aria-label="Takaisin">←</button>
         <span className="eyebrow">Profiili</span>
         <span style={{ width: 40 }} />
       </header>
