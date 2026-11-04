@@ -8,6 +8,8 @@ export interface QuizSettings {
   count: number;
   hints: number;
   extras: Extra[];
+  choiceSeconds: number;
+  writeSeconds: number;
 }
 
 export const LEVELS: { value: QuizLevel; emoji: string; label: string; text: string; extras: Extra[] }[] = [
@@ -28,3 +30,5 @@ export const EXTRAS: { value: Extra; label: string; text: string }[] = [
 
 export const COUNT_OPTIONS = [10, 15, 20];
 export const HINT_OPTIONS = [0, 1, 3, 5];
+export const CHOICE_SECONDS = [5, 10, 15];
+export const WRITE_SECONDS = [10, 20, 30];

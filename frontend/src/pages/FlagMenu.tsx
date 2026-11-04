@@ -1,11 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { io } from 'socket.io-client';
-import { SERVER_URL } from '../config';
 import { useAuth } from '../context/AuthContext';
 import { AuthError } from '../api/games';
-import { getFlagRecords, type FlagRecord } from '../api/flags';
+import { createFlagRoom, getFlagRecords, type FlagRecord } from '../api/flags';
 import AppHeader from '../components/AppHeader';
 import Avatar from '../components/Avatar';
 import { COUNT_OPTIONS, LEVELS, type QuizLevel } from '../constants/flags';
@@ -13,22 +11,6 @@ import './Lobby.css';
 import './Flags.css';
 
 const ROOM_CODE_CHARS = /[^ABCDEFGHJKLMNPQRSTUVWXYZ23456789]/g;
-
-// Luo lippuvisahuoneen palvelimella ja palauttaa sen koodin
-function createRoom(token: string, solo: boolean): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const socket = io(`${SERVER_URL}/flags`, { auth: { token } });
-    const fail = (err: Error) => { socket.disconnect(); reject(err); };
-    socket.on('connect_error', fail);
-    socket.on('connect', () => {
-      socket.timeout(8000).emit('fq:create', { solo }, (err: Error | null, res: { roomCode: string }) => {
-        socket.disconnect();
-        if (err || !res?.roomCode) reject(new Error('Huoneen luonti epäonnistui'));
-        else resolve(res.roomCode);
-      });
-    });
-  });
-}
 
 // Lippuvisan aula: yksinpeli, oma huone kavereille, liittyminen koodilla ja ennätykset
 export default function FlagMenu() {
@@ -61,7 +43,7 @@ export default function FlagMenu() {
     setBusy(solo ? 'solo' : 'room');
     setError('');
     try {
-      const code = await createRoom(token, solo);
+      const code = await createFlagRoom(token, { solo });
       navigate(`/lippu/${code}`);
     } catch (err) {
       handleError(err);

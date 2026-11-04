@@ -9,6 +9,7 @@ import {
   DEFAULT_EXTRAS, DEFAULT_HINTS, LEVEL_LABEL, checkAnswer, countryByCode, fiftyFiftyHint, generateQuestions, letterHint,
   scoreAnswer, type Correctness, type Extra, type Question, type QuizLevel,
 } from './quiz';
+import { COUNTRIES } from './countries';
 
 // Lippuvisan pelimoottori: huoneet, kysymysten kulku, pisteet, vinkit ja chat (/flags-nimiavaruus).
 // Sama moottori hoitaa yksinpelin (huone yhdelle) ja moninpelin.
@@ -23,6 +24,8 @@ interface Settings {
   count: number;
   hints: number;
   extras: Extra[];
+  choiceSeconds: number;
+  writeSeconds: number;
 }
 
 interface Answer {
@@ -30,6 +33,9 @@ interface Answer {
   points: number;
   elapsedMs: number;
   label: string;
+  // Putkibonus sisältyy pisteisiin; kerrotaan erikseen paljastuksessa
+  streakBonus?: number;
+  streak?: number;
 }
 
 interface Player {
@@ -48,6 +54,7 @@ interface Player {
   // Kysymyskohtaiset tulokset pelin lopun koostetta varten
   results: (Answer | null)[];
   usedHints: Set<string>;
+  streak: number;
 }
 
 type Phase = 'lobby' | 'starting' | 'question' | 'reveal' | 'over';
@@ -70,12 +77,22 @@ interface Room {
   lastReveal: unknown;
   lastOver: unknown;
   emptySince: number | null;
+  // Seuraava ajastettu siirtymä; tauko pysäyttää sen ja jatkaa jäljellä olevalla ajalla
+  scheduled: { fn: () => void; dueAt: number } | null;
+  paused: { byName: string; ready: Set<number>; at: number; remainingMs: number } | null;
+  // Harjoitus: pelataan vain annetut liput, eikä tulosta tallenneta
+  practice: string[] | null;
 }
 
 const LEVELS: QuizLevel[] = ['tourist', 'backpacker', 'globetrotter', 'lottery'];
 const EXTRAS: Extra[] = ['flagChoice', 'reveal', 'piece', 'trueFalse'];
 const COUNTS = [10, 15, 20];
 const HINT_COUNTS = [0, 1, 3, 5];
+const CHOICE_SECONDS = [5, 10, 15];
+const WRITE_SECONDS = [10, 20, 30];
+const MAX_PRACTICE = 20;
+const STREAK_STEP = 10;
+const MAX_STREAK_BONUS = 50;
 const MAX_PLAYERS = 8;
 const REVEAL_MS = 3500;
 const SOLO_REVEAL_MS = 2200;
@@ -84,6 +101,7 @@ const EMPTY_ROOM_TTL_MS = 2 * 60 * 1000;
 const IMAGE_TTL_MS = 3 * 60 * 60 * 1000;
 
 const rooms = new Map<string, Room>();
+const VALID_CODES = new Set(COUNTRIES.map(c => c.code));
 const imageTokens = new Map<string, { code: string; expires: number }>();
 let ns: Namespace | null = null;
 
@@ -110,7 +128,7 @@ setInterval(() => {
 
 // ---------- Apufunktiot ----------
 function defaultSettings(level: QuizLevel = 'tourist'): Settings {
-  return { level, count: 10, hints: DEFAULT_HINTS[level], extras: [...DEFAULT_EXTRAS[level]] };
+  return { level, count: 10, hints: DEFAULT_HINTS[level], extras: [...DEFAULT_EXTRAS[level]], choiceSeconds: 10, writeSeconds: 20 };
 }
 
 function sanitizeSettings(input: any, current: Settings): Settings {
@@ -124,6 +142,8 @@ function sanitizeSettings(input: any, current: Settings): Settings {
     extras: Array.isArray(input?.extras)
       ? EXTRAS.filter(e => input.extras.includes(e))
       : levelChanged ? [...DEFAULT_EXTRAS[level]] : current.extras,
+    choiceSeconds: CHOICE_SECONDS.includes(input?.choiceSeconds) ? input.choiceSeconds : current.choiceSeconds,
+    writeSeconds: WRITE_SECONDS.includes(input?.writeSeconds) ? input.writeSeconds : current.writeSeconds,
   };
 }
 
@@ -144,8 +164,47 @@ function publicPlayers(room: Room) {
   }));
 }
 
+function pauseInfo(room: Room) {
+  if (!room.paused) return null;
+  return { byName: room.paused.byName, ready: [...room.paused.ready], total: connectedPlayers(room).length };
+}
+
 function roomInfo(room: Room) {
-  return { roomCode: room.code, hostId: room.hostId, solo: room.solo, phase: room.phase, settings: room.settings, players: publicPlayers(room) };
+  return {
+    roomCode: room.code, hostId: room.hostId, solo: room.solo, phase: room.phase, settings: room.settings,
+    players: publicPlayers(room), paused: pauseInfo(room), practice: room.practice?.length ?? null,
+  };
+}
+
+// Ajastetut siirtymät kulkevat tämän kautta, jotta tauko voi pysäyttää ja jatkaa niitä
+function schedule(room: Room, fn: () => void, ms: number) {
+  clearTimeout(room.timer);
+  room.scheduled = { fn, dueAt: Date.now() + ms };
+  room.timer = setTimeout(() => { room.scheduled = null; fn(); }, ms);
+}
+
+function pauseGame(room: Room, byName: string) {
+  if (room.paused || !['starting', 'question', 'reveal'].includes(room.phase)) return;
+  clearTimeout(room.timer);
+  const remainingMs = room.scheduled ? Math.max(0, room.scheduled.dueAt - Date.now()) : 0;
+  room.paused = { byName, ready: new Set(), at: Date.now(), remainingMs };
+  broadcastRoom(room);
+}
+
+function resumeGame(room: Room) {
+  const paused = room.paused;
+  if (!paused) return;
+  room.paused = null;
+  // Kysymyksen kello siirtyy tauon verran eteenpäin, joten vastausaikaa ei kulu tauolla
+  room.questionStartedAt += Date.now() - paused.at;
+  const next = room.scheduled;
+  if (next) schedule(room, next.fn, paused.remainingMs);
+  broadcastRoom(room);
+  if (room.phase === 'question') ns?.to(room.code).emit('fq:resumed', { question: publicQuestion(room) });
+}
+
+function checkAllReady(room: Room) {
+  if (room.paused && connectedPlayers(room).every(p => room.paused!.ready.has(p.userId))) resumeGame(room);
 }
 
 function broadcastRoom(room: Room) {
@@ -181,19 +240,20 @@ function playerSockets(room: Room, userId: number) {
 // ---------- Pelin kulku ----------
 function startGame(room: Room) {
   clearTimeout(room.timer);
-  room.questions = generateQuestions(room.settings.level, room.settings.count, room.settings.extras);
+  room.paused = null;
+  room.questions = generateQuestions(room.settings.level, room.settings.count, room.settings.extras, room.settings, room.practice ?? undefined);
   room.index = -1;
   room.lastReveal = null;
   room.lastOver = null;
   // Pelin aikana poistuneet eivät jää seuraavaan peliin
   for (const p of [...room.players.values()]) if (p.sockets.size === 0) room.players.delete(p.userId);
   for (const p of room.players.values()) {
-    Object.assign(p, { score: 0, correct: 0, half: 0, answered: 0, answerMs: 0, hintsLeft: room.settings.hints, results: [], usedHints: new Set() });
+    Object.assign(p, { score: 0, correct: 0, half: 0, answered: 0, answerMs: 0, hintsLeft: room.settings.hints, results: [], usedHints: new Set(), streak: 0 });
   }
   room.phase = 'starting'; // lyhyt valmistautumistauko ennen ensimmäistä lippua
   broadcastRoom(room);
   ns?.to(room.code).emit('fq:starting', { inMs: FIRST_QUESTION_DELAY_MS, hintsLeft: room.settings.hints });
-  room.timer = setTimeout(() => nextQuestion(room), FIRST_QUESTION_DELAY_MS);
+  schedule(room, () => nextQuestion(room), FIRST_QUESTION_DELAY_MS);
 }
 
 function nextQuestion(room: Room) {
@@ -210,7 +270,7 @@ function nextQuestion(room: Room) {
   for (const p of room.players.values()) p.usedHints = new Set();
   broadcastRoom(room);
   ns?.to(room.code).emit('fq:question', publicQuestion(room));
-  room.timer = setTimeout(() => revealQuestion(room), q.timeMs + 300);
+  schedule(room, () => revealQuestion(room), q.timeMs + 300);
 }
 
 function evaluate(q: Question, value: unknown): { correctness: Correctness; label: string } | null {
@@ -232,7 +292,7 @@ function evaluate(q: Question, value: unknown): { correctness: Correctness; labe
 function submitAnswer(room: Room, userId: number, index: number, value: unknown) {
   const q = room.questions[room.index];
   const player = room.players.get(userId);
-  if (room.phase !== 'question' || index !== room.index || !q || !player || room.answers.has(userId)) return;
+  if (room.phase !== 'question' || room.paused || index !== room.index || !q || !player || room.answers.has(userId)) return;
   const elapsedMs = Date.now() - room.questionStartedAt;
   if (elapsedMs > q.timeMs + 500) return;
   const result = evaluate(q, value);
@@ -242,8 +302,7 @@ function submitAnswer(room: Room, userId: number, index: number, value: unknown)
   ns?.to(room.code).emit('fq:answered', { userId });
   // Kaikki paikalla olevat vastasivat: paljastus heti
   if (connectedPlayers(room).every(p => room.answers.has(p.userId))) {
-    clearTimeout(room.timer);
-    room.timer = setTimeout(() => revealQuestion(room), room.solo ? 150 : 600);
+    schedule(room, () => revealQuestion(room), room.solo ? 150 : 600);
   }
 }
 
@@ -254,7 +313,14 @@ function revealQuestion(room: Room) {
   for (const p of room.players.values()) {
     const a = room.answers.get(p.userId) ?? null;
     p.results[room.index] = a;
+    // Putki: kolmannesta peräkkäisestä täysin oikeasta alkaen lisäpisteitä
+    p.streak = a?.correctness === 'full' ? p.streak + 1 : 0;
     if (!a) continue;
+    if (p.streak >= 3) {
+      a.streakBonus = Math.min((p.streak - 2) * STREAK_STEP, MAX_STREAK_BONUS);
+      a.points += a.streakBonus;
+    }
+    a.streak = p.streak;
     p.answered += 1;
     p.score += a.points;
     if (a.correctness === 'full') { p.correct += 1; p.answerMs += a.elapsedMs; }
@@ -272,12 +338,15 @@ function revealQuestion(room: Room) {
     truth: q.kind === 'trueFalse' ? q.claim === q.code : null,
     results: [...room.players.values()].map(p => {
       const a = room.answers.get(p.userId);
-      return { userId: p.userId, correctness: a?.correctness ?? 'none', points: a?.points ?? 0, label: a?.label ?? null };
+      return {
+        userId: p.userId, correctness: a?.correctness ?? 'none', points: a?.points ?? 0, label: a?.label ?? null,
+        streak: p.streak, streakBonus: a?.streakBonus ?? 0,
+      };
     }),
   };
   broadcastRoom(room);
   ns?.to(room.code).emit('fq:reveal', room.lastReveal);
-  room.timer = setTimeout(() => nextQuestion(room), room.solo ? SOLO_REVEAL_MS : REVEAL_MS);
+  schedule(room, () => nextQuestion(room), room.solo ? SOLO_REVEAL_MS : REVEAL_MS);
 }
 
 function factFor(room: Room) {
@@ -303,6 +372,8 @@ function factFor(room: Room) {
 
 async function finishGame(room: Room) {
   clearTimeout(room.timer);
+  room.scheduled = null;
+  room.paused = null;
   room.phase = 'over';
   const standings = [...room.players.values()]
     .sort((a, b) => b.score - a.score || b.correct - a.correct || a.answerMs - b.answerMs)
@@ -330,7 +401,7 @@ async function finishGame(room: Room) {
   // Yksinpelin ennätys: verrataan aiempaan parhaaseen ennen tallennusta
   let previousBest: number | null = null;
   const top = standings[0];
-  if (room.solo && top) {
+  if (room.solo && top && !room.practice) {
     try {
       const best = await pool.query(
         `SELECT MAX(fp.score)::int AS best FROM flag_game_players fp JOIN flag_games g ON g.id = fp.game_id
@@ -348,12 +419,14 @@ async function finishGame(room: Room) {
     level: room.settings.level,
     levelLabel: LEVEL_LABEL[room.settings.level],
     count: room.settings.count,
-    newRecord: room.solo && top ? previousBest === null || top.score > previousBest : false,
+    newRecord: room.solo && top && !room.practice ? previousBest === null || top.score > previousBest : false,
     previousBest,
+    practice: !!room.practice,
   };
   broadcastRoom(room);
   ns?.to(room.code).emit('fq:over', room.lastOver);
-  saveGame(room, standings).catch(err => console.error('Lippuvisan tallennus epäonnistui:', err));
+  // Harjoituksia ei tallenneta tilastoihin eikä ennätyksiin
+  if (!room.practice) saveGame(room, standings).catch(err => console.error('Lippuvisan tallennus epäonnistui:', err));
 }
 
 async function saveGame(room: Room, standings: { userId: number; placement: number }[]) {
@@ -382,6 +455,9 @@ function destroyRoom(room: Room) {
 
 function backToLobby(room: Room) {
   clearTimeout(room.timer);
+  room.scheduled = null;
+  room.paused = null;
+  room.practice = null;
   room.phase = 'lobby';
   for (const p of [...room.players.values()]) if (p.sockets.size === 0) room.players.delete(p.userId);
   for (const p of room.players.values()) p.score = 0;
@@ -400,7 +476,7 @@ async function getAvatar(userId: number) {
   return { avatarEmoji: row.avatar_emoji ?? null, avatarColor: row.avatar_color ?? null, avatarImage: row.avatar_image ?? null };
 }
 
-async function createRoom(hostId: number, solo: boolean, level: QuizLevel): Promise<Room> {
+async function createRoom(hostId: number, solo: boolean, level: QuizLevel, practice: string[] | null): Promise<Room> {
   let code = generateRoomCode();
   for (let i = 0; i < 20; i++) {
     const taken = rooms.has(code)
@@ -411,7 +487,9 @@ async function createRoom(hostId: number, solo: boolean, level: QuizLevel): Prom
   const room: Room = {
     code, hostId, solo, settings: defaultSettings(level), phase: 'lobby', players: new Map(), questions: [], index: -1,
     questionStartedAt: 0, images: {}, answers: new Map(), chat: [], lastReveal: null, lastOver: null, emptySince: Date.now(),
+    scheduled: null, paused: null, practice,
   };
+  if (practice) room.settings.count = practice.length;
   rooms.set(code, room);
   return room;
 }
@@ -471,23 +549,27 @@ export function attachFlagQuiz(namespace: Namespace, authenticate: (socket: Auth
       if (connectedPlayers(room).length === 0) room.emptySince = Date.now();
       ensureHost(room);
       broadcastRoom(room);
+      checkAllReady(room);
       // Jos poistuja oli ainoa, jota odotettiin, paljastetaan heti
-      if (room.phase === 'question' && connectedPlayers(room).length > 0
+      if (room.phase === 'question' && !room.paused && connectedPlayers(room).length > 0
         && connectedPlayers(room).every(p => room.answers.has(p.userId))) {
-        clearTimeout(room.timer);
-        room.timer = setTimeout(() => revealQuestion(room), 300);
+        schedule(room, () => revealQuestion(room), 300);
       }
     };
 
-    on('fq:create', async ({ solo, level }, ack) => {
-      const room = await createRoom(userId, !!solo, LEVELS.includes(level) ? level : 'tourist');
+    on('fq:create', async ({ solo, level, practice }, ack) => {
+      // Harjoitus virheistä: vain tunnettuja lippuja, ilman tuplia
+      const codes = Array.isArray(practice)
+        ? [...new Set(practice.filter((c: unknown) => typeof c === 'string' && VALID_CODES.has(c)))].slice(0, MAX_PRACTICE) as string[]
+        : null;
+      const room = await createRoom(userId, !!solo || !!codes?.length, LEVELS.includes(level) ? level : 'tourist', codes?.length ? codes : null);
       ack?.({ roomCode: room.code });
     });
 
     on('fq:join', async ({ roomCode }) => {
       const code = parseRoomCode(roomCode);
       const room = code ? rooms.get(code) : undefined;
-      if (!room) { socket.emit('fq:joinRejected', { message: 'Huonetta ei löytynyt tai peli on päättynyt' }); return; }
+      if (!room) { socket.emit('fq:joinRejected', { message: 'Huonetta ei löytynyt. Peli on voinut päättyä, tai palvelin päivitettiin kesken pelin.' }); return; }
       const existing = room.players.get(userId);
       if (!existing) {
         if (room.solo && userId !== room.hostId) { socket.emit('fq:joinRejected', { message: 'Tämä on toisen pelaajan yksinpeli' }); return; }
@@ -504,7 +586,7 @@ export function attachFlagQuiz(namespace: Namespace, authenticate: (socket: Auth
       } else {
         room.players.set(userId, {
           userId, username: socket.username!, ...avatar, sockets: new Set([socket.id]), score: 0, correct: 0, half: 0,
-          answered: 0, answerMs: 0, hintsLeft: room.settings.hints, results: [], usedHints: new Set(),
+          answered: 0, answerMs: 0, hintsLeft: room.settings.hints, results: [], usedHints: new Set(), streak: 0,
         });
       }
       room.emptySince = null;
@@ -538,6 +620,23 @@ export function attachFlagQuiz(namespace: Namespace, authenticate: (socket: Auth
       startGame(room);
     });
 
+    // Tauko: kuka tahansa voi pysäyttää; peli jatkuu, kun kaikki paikalla olevat ovat valmiita
+    on('fq:pause', () => {
+      const room = currentRoom;
+      const player = room?.players.get(userId);
+      if (!room || !player) return;
+      pauseGame(room, player.username);
+    });
+
+    on('fq:ready', ({ ready }) => {
+      const room = currentRoom;
+      if (!room?.paused || !room.players.has(userId)) return;
+      if (ready === false) room.paused.ready.delete(userId);
+      else room.paused.ready.add(userId);
+      broadcastRoom(room);
+      checkAllReady(room);
+    });
+
     on('fq:toLobby', () => {
       const room = currentRoom;
       if (!room || room.hostId !== userId || room.phase !== 'over') return;
@@ -552,7 +651,7 @@ export function attachFlagQuiz(namespace: Namespace, authenticate: (socket: Auth
       const room = currentRoom;
       const player = room?.players.get(userId);
       const q = room?.questions[room.index];
-      if (!room || !player || !q || room.phase !== 'question' || index !== room.index || room.answers.has(userId)) return;
+      if (!room || !player || !q || room.phase !== 'question' || room.paused || index !== room.index || room.answers.has(userId)) return;
       if (player.hintsLeft <= 0 || player.usedHints.has(type)) return;
       let payload: Record<string, unknown> | null = null;
       if (type === 'letters' && q.kind === 'write') payload = { letters: letterHint(q.code) };

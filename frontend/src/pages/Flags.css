@@ -215,3 +215,62 @@
 .setting-row .seg { display: flex; width: 100%; }
 .setting-row .seg button { flex: 1; }
 .flag-settings .section-head { text-align: left; }
+
+/* ---------- Paljastus kysymyksessä ---------- */
+.flag-option.correct, .flag-option-img.correct { border-color: var(--accent-line); background: var(--accent-soft); color: var(--text); opacity: 1 !important; box-shadow: 0 0 0 2px var(--accent-line); }
+.flag-option.wrong, .flag-option-img.wrong { border-color: var(--danger); background: var(--danger-soft); color: var(--text); opacity: 1 !important; box-shadow: 0 0 0 2px var(--danger); }
+.flag-option.faded, .flag-option-img.faded { opacity: 0.35; }
+.flag-option.correct::before { content: '✓ '; color: var(--accent-text); }
+.flag-option.wrong::before { content: '✗ '; color: var(--danger); }
+.flag-correct-name { margin: 0; text-align: center; font-family: var(--font-display); font-size: 24px; font-weight: 700; }
+.flag-write .input.result-full { border-color: var(--accent-line); background: var(--accent-soft); }
+.flag-write .input.result-half { border-color: var(--warn); background: var(--warn-soft); }
+.flag-write .input.result-wrong, .flag-write .input.result-none { border-color: var(--danger); background: var(--danger-soft); }
+.flag-write .input:disabled { opacity: 1; color: var(--text); }
+
+.reveal-strip { display: flex; flex-direction: column; align-items: center; gap: 6px; min-height: 36px; }
+.reveal-strip .flag-verdict { position: relative; }
+.points-pop { font-family: var(--font-display); }
+.streak-line { margin: 0; font-size: 14px; font-weight: 700; color: var(--warn); }
+.topbar-streak { color: var(--warn); }
+.burst { position: absolute; left: 50%; top: 50%; pointer-events: none; }
+.burst span { position: absolute; width: 7px; height: 7px; margin: -3px; border-radius: 50%; background: var(--accent); }
+
+/* Väärä vastaus: lyhyt ravistus */
+.flag-question.shake .flag-frame, .flag-question.shake .flag-option-grid { animation: flag-shake 0.4s ease; }
+@keyframes flag-shake { 20%, 60% { transform: translateX(-6px); } 40%, 80% { transform: translateX(6px); } }
+
+/* Viimeiset sekunnit: palkki sykkii */
+.flag-timer.urgent { animation: timer-pulse 0.5s ease-in-out infinite alternate; }
+@keyframes timer-pulse { to { transform: scaleY(1.8); } }
+
+/* Kirjoittaessa lippu pienenee, jotta kenttä ja nappi mahtuvat näppäimistön yläpuolelle */
+.flag-question.typing .flag-frame { max-height: 20dvh; width: auto; aspect-ratio: 4 / 3; }
+.flag-question.typing { gap: 8px; }
+
+/* Tauolla kysymys piilotetaan, ettei taukoa voi käyttää miettimiseen */
+.flag-question.paused { visibility: hidden; }
+
+/* ---------- Asetukset ---------- */
+.more-settings {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 2px;
+  border: none;
+  border-top: 1px solid var(--border);
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+}
+.more-settings .faint { font-weight: 400; font-size: 12px; }
+
+/* ---------- Pelin loppu ---------- */
+.over-tools { display: flex; gap: 8px; flex-wrap: wrap; }
+.over-tools .btn { flex: 1 1 140px; min-height: 44px; font-size: 14px; }
+.flag-rules { margin: 0 0 12px; padding-left: 18px; display: flex; flex-direction: column; gap: 8px; font-size: 14px; line-height: 1.45; color: var(--text-2); text-align: left; }
+.flag-rules b { color: var(--text); }

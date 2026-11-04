@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import Modal from './Modal';
 import RulesList from './RulesList';
 import type { GameMode } from '../constants/symbols';
@@ -9,7 +9,13 @@ interface PauseMenuProps {
   readyCount: number;
   readyTotal: number;
   pausedByName: string | null;
-  mode: GameMode;
+  // Kivi-paperi-saksien säännöt pelimuodon mukaan, tai muun pelin oma sääntöteksti
+  mode?: GameMode;
+  rules?: ReactNode;
+  // Chat ja poistumisen kuvaus ovat moninpeliä varten
+  showChat?: boolean;
+  exitText?: string;
+  resumeNote?: string;
   onToggleReady: () => void;
   onOpenAudio: () => void;
   onOpenChat: () => void;
@@ -20,7 +26,7 @@ interface PauseMenuProps {
 
 // Tauko pysäyttää pelin kaikilta; peli jatkuu kun jokainen on kuitannut olevansa valmis
 export default function PauseMenu({
-  visible, iAmReady, readyCount, readyTotal, pausedByName, mode, onToggleReady, onOpenAudio, onOpenChat, unread, lastMessage, onExit,
+  visible, iAmReady, readyCount, readyTotal, pausedByName, mode = 'classic', rules, showChat = true, exitText, resumeNote = 'Kesken jäänyt kierros aloitetaan alusta.', onToggleReady, onOpenAudio, onOpenChat, unread, lastMessage, onExit,
 }: PauseMenuProps) {
   const [view, setView] = useState<'menu' | 'rules' | 'confirm-exit'>('menu');
 
@@ -38,7 +44,7 @@ export default function PauseMenu({
       {view === 'rules' && (
         <>
           <h2 className="sheet-title">Säännöt</h2>
-          <RulesList mode={mode} />
+          {rules ?? <RulesList mode={mode} />}
           <button className="btn btn-secondary btn-block" onClick={() => setView('menu')}>Takaisin</button>
         </>
       )}
@@ -46,7 +52,7 @@ export default function PauseMenu({
       {view === 'confirm-exit' && (
         <>
           <h2 className="sheet-title">Poistutaanko pelistä?</h2>
-          <p className="sheet-sub">Muut jatkavat ilman sinua. Et voi palata kesken käynnissä olevan pelin.</p>
+          <p className="sheet-sub">{exitText ?? 'Muut jatkavat ilman sinua. Et voi palata kesken käynnissä olevan pelin.'}</p>
           <div className="sheet-actions">
             <button className="btn btn-danger btn-block" onClick={onExit}>Poistu pelistä</button>
             <button className="btn btn-secondary btn-block" onClick={() => setView('menu')}>Peruuta</button>
@@ -58,8 +64,8 @@ export default function PauseMenu({
         <>
           <h2 className="sheet-title">{title}</h2>
           <p className="sheet-sub">
-            {readyCount}/{readyTotal} valmiina — peli jatkuu kun kaikki ovat valmiita.
-            Kesken jäänyt kierros aloitetaan alusta.
+            {readyTotal > 1 ? `${readyCount}/${readyTotal} valmiina — peli jatkuu kun kaikki ovat valmiita. ` : ''}
+            {resumeNote}
           </p>
           {/* Tauon aikana pöydän puhekuplat jäävät valikon alle, joten uusin viesti näytetään tässä */}
           {lastMessage && (
@@ -71,9 +77,11 @@ export default function PauseMenu({
             <button className={`btn btn-block ${iAmReady ? 'btn-secondary' : 'btn-primary'}`} onClick={onToggleReady}>
               {iAmReady ? 'En olekaan valmis' : 'Jatketaan'}
             </button>
-            <button className="btn btn-secondary btn-block" onClick={onOpenChat}>
-              Chat ja emotet{unread > 0 && <span className="unread-inline">{unread > 9 ? '9+' : unread}</span>}
-            </button>
+            {showChat && (
+              <button className="btn btn-secondary btn-block" onClick={onOpenChat}>
+                Chat ja emotet{unread > 0 && <span className="unread-inline">{unread > 9 ? '9+' : unread}</span>}
+              </button>
+            )}
             <button className="btn btn-secondary btn-block" onClick={() => setView('rules')}>Säännöt</button>
             <button className="btn btn-secondary btn-block" onClick={onOpenAudio}>Äänet ja musiikki</button>
             <button className="btn btn-ghost btn-block" onClick={() => setView('confirm-exit')}>Poistu pelistä</button>

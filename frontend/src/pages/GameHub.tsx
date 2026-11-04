@@ -46,26 +46,20 @@ export default function GameHub() {
         <InstallHint />
 
         <Link to="/kpsl" className="card game-card">
-          <div className="game-card-art" aria-hidden="true">
-            <span>✊</span><span>✋</span><span>✌️</span>
-          </div>
-          <div className="game-card-body">
-            <p className="eyebrow">2–4 pelaajaa · reaaliajassa</p>
-            <h2 className="game-card-title">Kivi, paperi, sakset</h2>
-            <p className="muted game-card-text">Klassinen tai Lisko–Spock. Luo huone ja kutsu kaverit.</p>
-          </div>
+          <span className="game-card-art" aria-hidden="true">✊</span>
+          <span className="game-card-body">
+            <b className="game-card-title">Kivi, paperi, sakset</b>
+            <span className="muted game-card-text">Klassinen tai Lisko–Spock · 2–4 pelaajaa</span>
+          </span>
           <span className="game-card-go" aria-hidden="true">→</span>
         </Link>
 
         <Link to="/lippu" className="card game-card">
-          <div className="game-card-art flags" aria-hidden="true">
-            <img src="/flags/fi.svg" alt="" /><img src="/flags/br.svg" alt="" /><img src="/flags/jp.svg" alt="" />
-          </div>
-          <div className="game-card-body">
-            <p className="eyebrow">Yksin tai kavereiden kanssa</p>
-            <h2 className="game-card-title">Lippuvisa</h2>
-            <p className="muted game-card-text">Tunnista maailman liput neljällä vaikeustasolla.</p>
-          </div>
+          <span className="game-card-art flag" aria-hidden="true"><img src="/flags/fi.svg" alt="" /></span>
+          <span className="game-card-body">
+            <b className="game-card-title">Lippuvisa</b>
+            <span className="muted game-card-text">Neljä tasoa · yksin tai kavereiden kanssa</span>
+          </span>
           <span className="game-card-go" aria-hidden="true">→</span>
         </Link>
 

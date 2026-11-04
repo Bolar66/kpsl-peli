@@ -39,7 +39,18 @@ export const DEFAULT_EXTRAS: Record<QuizLevel, Extra[]> = {
 
 export const DEFAULT_HINTS: Record<QuizLevel, number> = { tourist: 0, backpacker: 3, globetrotter: 3, lottery: 3 };
 
-const TIME_MS: Record<AnswerKind, number> = { choice: 10_000, write: 20_000, flagChoice: 12_000, trueFalse: 6_000 };
+// Vastausajat: host valitsee monivalinnan ja kirjoituksen ajan, muut johdetaan niistä
+export interface AnswerTimes {
+  choiceSeconds: number;
+  writeSeconds: number;
+}
+
+function timeFor(kind: AnswerKind, times: AnswerTimes): number {
+  if (kind === 'write') return times.writeSeconds * 1000;
+  if (kind === 'flagChoice') return (times.choiceSeconds + 2) * 1000;
+  if (kind === 'trueFalse') return Math.max(4, Math.round(times.choiceSeconds * 0.6)) * 1000;
+  return times.choiceSeconds * 1000;
+}
 const REVEAL_EXTRA_MS = 5_000;
 
 const BY_CODE = new Map(COUNTRIES.map(c => [c.code, c]));
@@ -191,7 +202,8 @@ function tierSequence(level: QuizLevel, count: number): (1 | 2 | 3 | 4)[] {
   return gaps.flatMap((g, i) => (i < easy.length ? [...g, easy[i]!] : g));
 }
 
-export function generateQuestions(level: QuizLevel, count: number, extras: Extra[]): Question[] {
+// Kysymykset arvotaan tason mukaan, tai harjoituksessa annetuista lipuista (practiceCodes)
+export function generateQuestions(level: QuizLevel, count: number, extras: Extra[], times: AnswerTimes, practiceCodes?: string[]): Question[] {
   const config = LEVELS[level];
   const enabled = extras.filter(e => config.allowedExtras.includes(e));
   const answerExtras = enabled.filter((e): e is 'flagChoice' | 'trueFalse' => e === 'flagChoice' || e === 'trueFalse');
@@ -202,9 +214,16 @@ export function generateQuestions(level: QuizLevel, count: number, extras: Extra
   const optionPool = COUNTRIES.filter(c => c.tier <= Math.max(maxTier, 2));
 
   const used = new Set<string>();
-  return tierSequence(level, count).map((tier) => {
-    const candidates = COUNTRIES.filter(c => c.tier === tier && !used.has(c.code));
-    const country = pick(candidates.length ? candidates : levelPool.filter(c => !used.has(c.code)));
+  const practice = practiceCodes ? shuffle(practiceCodes).map(countryByCode) : null;
+  const slots: (Country | 1 | 2 | 3 | 4)[] = practice ?? tierSequence(level, count);
+  return slots.map((slot) => {
+    let country: Country;
+    if (typeof slot === 'object') {
+      country = slot;
+    } else {
+      const candidates = COUNTRIES.filter(c => c.tier === slot && !used.has(c.code));
+      country = pick(candidates.length ? candidates : levelPool.filter(c => !used.has(c.code)));
+    }
     used.add(country.code);
 
     let kind: AnswerKind = Math.random() < config.choiceShare ? 'choice' : 'write';
@@ -212,7 +231,7 @@ export function generateQuestions(level: QuizLevel, count: number, extras: Extra
     // Paljastuva lippu ja palanen lippua eivät sovi kysymykseen, jossa valitaan lippu
     const display: DisplayKind = kind !== 'flagChoice' && displayExtras.length && Math.random() < 0.3 ? pick(displayExtras) : 'normal';
 
-    const question: Question = { code: country.code, kind, display, timeMs: TIME_MS[kind] + (display !== 'normal' ? REVEAL_EXTRA_MS : 0) };
+    const question: Question = { code: country.code, kind, display, timeMs: timeFor(kind, times) + (display !== 'normal' ? REVEAL_EXTRA_MS : 0) };
     if (kind === 'choice' || kind === 'flagChoice') {
       question.options = shuffle([country.code, ...distractors(country.code, optionPool, 3)]);
     }

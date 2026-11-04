@@ -154,41 +154,43 @@
 
 /* ---------- Pelivalikko ---------- */
 .card.game-card {
-  position: relative;
   display: flex;
-  flex-direction: column;
+  align-items: center;
   gap: 14px;
+  padding: 14px 16px;
   color: var(--text);
   text-decoration: none;
   border-color: var(--accent-line);
   transition: transform 0.15s var(--ease), border-color 0.15s ease;
 }
-.game-card:active { transform: scale(0.98); }
-.game-card-art { display: flex; gap: 8px; font-size: 26px; }
-.game-card-art span {
-  width: 52px;
-  height: 52px;
+.card.game-card:active { transform: scale(0.98); }
+.game-card-art {
+  flex-shrink: 0;
+  width: 56px;
+  height: 56px;
   border-radius: 16px;
   background: var(--surface-2);
   display: flex;
   align-items: center;
   justify-content: center;
+  font-size: 28px;
+  overflow: hidden;
 }
-.game-card-title { font-size: 22px; margin-top: 4px; }
-.game-card-text { font-size: 14px; margin-top: 4px; }
+.game-card-art.flag img { width: 44px; height: 33px; object-fit: cover; border-radius: 5px; box-shadow: 0 0 0 1px var(--border); }
+.game-card-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.game-card-title { font-family: var(--font-display); font-size: 18px; }
+.game-card-text { font-size: 13px; }
 .game-card-go {
-  position: absolute;
-  top: 20px;
-  right: 20px;
-  width: 40px;
-  height: 40px;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   background: var(--accent);
   color: var(--accent-ink);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 700;
 }
 
@@ -237,5 +239,4 @@
 .push-prompt .sheet-actions { width: 100%; }
 .push-prompt-note { margin: 0 0 8px; font-size: 13px; }
 
-.game-card-art.flags img { width: 52px; height: 39px; object-fit: cover; border-radius: 8px; box-shadow: 0 0 0 1px var(--border); }
 .coming-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }

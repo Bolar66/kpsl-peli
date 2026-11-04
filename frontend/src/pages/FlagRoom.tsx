@@ -4,18 +4,21 @@ import { io, type Socket } from 'socket.io-client';
 import { motion, AnimatePresence } from 'framer-motion';
 import { SERVER_URL } from '../config';
 import { useAuth } from '../context/AuthContext';
-import Modal from '../components/Modal';
+import { createFlagRoom } from '../api/flags';
 import ChatSheet from '../components/ChatSheet';
+import PauseMenu from '../components/PauseMenu';
+import AudioSettingsSheet from '../components/AudioSettings';
 import InviteFriendsSheet from '../components/InviteFriendsSheet';
 import type { BubbleData } from '../components/ChatBubble';
 import {
-  FlagGameOverView, FlagPlayerChips, FlagQuestionView, FlagRevealView, FlagSettingsPanel,
+  FlagGameOverView, FlagPlayerChips, FlagQuestionView, FlagRevealView, FlagRules, FlagSettingsPanel,
   type FlagOver, type FlagPlayer, type FlagQuestion, type FlagReveal, type HintState,
 } from '../components/FlagViews';
 import { BUBBLE_MS, EMOTE_BUBBLE_MS, isBigEmoji, type ChatMessage } from '../constants/chat';
 import { LEVEL_BY_VALUE, type QuizSettings } from '../constants/flags';
 import { sfx, crowdFx } from '../constants/sound';
 import { setMusic } from '../constants/music';
+import { setMusicMuffled } from '../constants/audioEngine';
 import { haptic } from '../constants/players';
 import './Lobby.css';
 import './Room.css';
@@ -30,9 +33,22 @@ interface RoomInfo {
   phase: Phase;
   settings: QuizSettings;
   players: FlagPlayer[];
+  paused: { byName: string; ready: number[]; total: number } | null;
+  practice: number | null;
 }
 
-// Lippuvisan huone: aula ja asetukset, kysymykset, paljastukset ja lopputulos (yksin- ja moninpeli)
+// Yksinpelin asetukset muistetaan seuraavaan kertaan
+const SOLO_SETTINGS_KEY = 'bowl-flag-solo-settings';
+
+function loadSoloSettings(): Partial<QuizSettings> | null {
+  try { return JSON.parse(localStorage.getItem(SOLO_SETTINGS_KEY) ?? 'null'); } catch { return null; }
+}
+
+function saveSoloSettings(settings: QuizSettings) {
+  try { localStorage.setItem(SOLO_SETTINGS_KEY, JSON.stringify(settings)); } catch { /* yksityinen selaus */ }
+}
+
+// Lippuvisan huone: aula ja asetukset, kysymykset ja paljastukset, tauko ja lopputulos (yksin- ja moninpeli)
 export default function FlagRoom() {
   const { roomCode } = useParams();
   const { token, user, logout } = useAuth();
@@ -45,17 +61,22 @@ export default function FlagRoom() {
   const [hintsLeft, setHintsLeft] = useState(0);
   const [reveal, setReveal] = useState<FlagReveal | null>(null);
   const [over, setOver] = useState<FlagOver | null>(null);
+  const [streak, setStreak] = useState(0);
   const [startingAt, setStartingAt] = useState<number | null>(null);
+  const [now, setNow] = useState(() => Date.now());
   const [rejected, setRejected] = useState('');
   const [chat, setChat] = useState<ChatMessage[]>([]);
   const [bubbles, setBubbles] = useState<Record<number, BubbleData>>({});
   const [chatOpen, setChatOpen] = useState(false);
+  const [audioOpen, setAudioOpen] = useState(false);
   const [unread, setUnread] = useState(0);
   const [inviteOpen, setInviteOpen] = useState(false);
-  const [confirmLeave, setConfirmLeave] = useState(false);
   const [copied, setCopied] = useState(false);
   const chatOpenRef = useRef(false);
   const myIdRef = useRef<number | undefined>(user?.id);
+  // Huonekohtaiset kertatoimet: sama sivu voi vaihtaa huonetta (esim. harjoitukseen), joten muistetaan koodi
+  const soloSettingsApplied = useRef<string | null>(null);
+  const practiceStarted = useRef<string | null>(null);
 
   useEffect(() => { chatOpenRef.current = chatOpen; }, [chatOpen]);
   useEffect(() => { myIdRef.current = user?.id; }, [user?.id]);
@@ -83,6 +104,8 @@ export default function FlagRoom() {
       setOver(null);
       setReveal(null);
       setQuestion(null);
+      setStreak(0);
+      setNow(Date.now());
       setStartingAt(Date.now() + inMs);
       sfx.roundStart();
     });
@@ -92,6 +115,10 @@ export default function FlagRoom() {
       setQuestion({ ...q, receivedAt: Date.now() });
       setMyAnswer(null);
       sfx.flip();
+    });
+    // Tauon jälkeen kysymyksen aika jatkuu siitä, mihin se jäi
+    s.on('fq:resumed', ({ question: q }: { question: Omit<FlagQuestion, 'receivedAt'> | null }) => {
+      if (q) setQuestion({ ...q, receivedAt: Date.now() });
     });
     s.on('fq:answered', ({ userId }: { userId: number }) => {
       setRoom(prev => prev && { ...prev, players: prev.players.map(p => (p.userId === userId ? { ...p, answered: true } : p)) });
@@ -103,6 +130,7 @@ export default function FlagRoom() {
     s.on('fq:reveal', (r: FlagReveal) => {
       setReveal(r);
       const mine = r.results.find(x => x.userId === myIdRef.current);
+      setStreak(mine?.streak ?? 0);
       if (mine?.correctness === 'full') { sfx.win(); haptic(30); }
       else if (mine?.correctness === 'half') sfx.draw();
       else { sfx.lose(); haptic([20, 40, 20]); }
@@ -139,14 +167,37 @@ export default function FlagRoom() {
     };
   }, [token, roomCode, logout]);
 
-  // Pelimusiikki kysymysten ajan, rauhallisempi aulassa ja lopussa
   const phase = room?.phase;
+  const paused = !!room?.paused;
+  const isHost = !!room && room.hostId === user?.id;
+  const solo = !!room?.solo;
+
+  // Pelimusiikki kysymysten ajan, rauhallisempi aulassa ja lopussa; tauolla vaimennettuna
   useEffect(() => {
     setMusic(phase === 'question' || phase === 'reveal' || phase === 'starting' ? 'game' : 'menu');
   }, [phase]);
+  useEffect(() => {
+    setMusicMuffled(paused);
+    return () => setMusicMuffled(false);
+  }, [paused]);
+
+  // Yksinpeli: edellisen kerran asetukset käyttöön; harjoitus alkaa heti
+  useEffect(() => {
+    if (!room || !socket || !isHost || !solo || room.phase !== 'lobby') return;
+    if (room.practice) {
+      if (practiceStarted.current !== room.roomCode) {
+        practiceStarted.current = room.roomCode;
+        socket.emit('fq:start', {});
+      }
+      return;
+    }
+    if (soloSettingsApplied.current === room.roomCode) return;
+    soloSettingsApplied.current = room.roomCode;
+    const saved = loadSoloSettings();
+    if (saved) socket.emit('fq:settings', { settings: saved });
+  }, [room, socket, isHost, solo]);
 
   // Valmistautumisen lähtölaskenta
-  const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     if (!startingAt) return;
     const t = setInterval(() => setNow(Date.now()), 200);
@@ -154,20 +205,25 @@ export default function FlagRoom() {
   }, [startingAt]);
   const countdown = startingAt ? Math.max(1, Math.ceil((startingAt - now) / 1000)) : null;
 
-  const isHost = !!room && room.hostId === user?.id;
   const me = room?.players.find(p => p.userId === user?.id);
   const answeredCount = room?.players.filter(p => p.answered).length ?? 0;
   const connectedCount = room?.players.filter(p => p.connected).length ?? 0;
   const memberIds = useMemo(() => room?.players.map(p => p.userId) ?? [], [room?.players]);
+  const iAmReady = !!room?.paused && !!user && room.paused.ready.includes(user.id);
+  const lastMessage = chat.length ? chat[chat.length - 1]! : null;
 
   function changeSettings(partial: Partial<QuizSettings>) {
-    if (!room) return;
     // Tason vaihto palauttaa palvelimella tason oletusvinkit ja -lisätavat
     socket?.emit('fq:settings', { settings: partial.level ? { level: partial.level } : partial });
   }
 
+  function start() {
+    if (solo && room && !room.practice) saveSoloSettings(room.settings);
+    socket?.emit('fq:start', {});
+  }
+
   function answer(value: string | number | boolean) {
-    if (!question || myAnswer?.index === question.index) return;
+    if (!question || myAnswer?.index === question.index || paused) return;
     setMyAnswer({ index: question.index, value });
     socket?.emit('fq:answer', { index: question.index, value });
     sfx.pick();
@@ -175,6 +231,14 @@ export default function FlagRoom() {
 
   function sendChat(message: { text?: string; emote?: string }) {
     socket?.emit('chat:send', message);
+  }
+
+  async function practice(codes: string[]) {
+    if (!token) return;
+    try {
+      const code = await createFlagRoom(token, { solo: true, practice: codes });
+      navigate(`/lippu/${code}`);
+    } catch { /* yhteysvirhe: pysytään tulossivulla */ }
   }
 
   async function shareLink() {
@@ -198,42 +262,50 @@ export default function FlagRoom() {
     return (
       <div className="room-page">
         <div className="room-center">
-        <div className="card rejected">
-          <div className="rejected-icon" aria-hidden="true">🚩</div>
-          <h1>Huoneeseen {roomCode} ei pääse</h1>
-          <p className="muted">{rejected}</p>
-          <button className="btn btn-primary btn-block" onClick={leave}>Takaisin lippuvisaan</button>
-        </div>
+          <div className="card rejected">
+            <div className="rejected-icon" aria-hidden="true">🚩</div>
+            <h1>Huoneeseen {roomCode} ei pääse</h1>
+            <p className="muted">{rejected}</p>
+            <button className="btn btn-primary btn-block" onClick={leave}>Takaisin lippuvisaan</button>
+          </div>
         </div>
       </div>
     );
   }
 
-  const solo = !!room?.solo;
   const inGame = phase === 'question' || phase === 'reveal' || phase === 'starting';
+  const shownIndex = question?.index ?? reveal?.index ?? 0;
 
   return (
     <div className="room-page flag-room">
       <header className="room-topbar">
-        <button className="icon-btn" onClick={() => (inGame && !solo ? setConfirmLeave(true) : leave())} aria-label="Poistu">←</button>
+        {inGame ? (
+          <button className="icon-btn" onClick={() => socket?.emit('fq:pause')} aria-label="Tauko" title="Tauko">❙❙</button>
+        ) : (
+          <button className="icon-btn" onClick={leave} aria-label="Poistu">←</button>
+        )}
         <div className="room-topbar-center">
           {(phase === 'question' && question) || (phase === 'reveal' && reveal) ? (
             <>
-              <span className="topbar-round">Lippu {((question?.index ?? reveal?.index ?? 0) + 1)}/{question?.total ?? room?.settings.count}</span>
-              <span className="eyebrow">{room ? LEVEL_BY_VALUE[room.settings.level].label : ''} · {me?.score ?? 0} p</span>
+              <span className="topbar-round">Lippu {shownIndex + 1}/{question?.total ?? room?.settings.count}</span>
+              <span className="eyebrow">
+                {room?.practice ? 'Harjoitus' : room ? LEVEL_BY_VALUE[room.settings.level].label : ''} · {me?.score ?? 0} p
+                {streak >= 2 && <span className="topbar-streak"> · 🔥{streak}</span>}
+              </span>
             </>
           ) : (
-            <span className="eyebrow">{solo ? 'Lippuvisa · yksinpeli' : 'Lippuvisa'}</span>
+            <span className="eyebrow">{room?.practice ? 'Lippuvisa · harjoitus' : solo ? 'Lippuvisa · yksinpeli' : 'Lippuvisa'}</span>
           )}
         </div>
         <div className="room-topbar-right">
-          {!solo && (
+          {!solo ? (
             <button className="icon-btn chat-btn" onClick={() => { setChatOpen(true); setUnread(0); }} aria-label={unread ? `Chat ja emotet, ${unread} uutta viestiä` : 'Chat ja emotet'}>
               😀
               {unread > 0 && <span className="unread">{unread > 9 ? '9+' : unread}</span>}
             </button>
+          ) : (
+            <button className="icon-btn" onClick={() => setAudioOpen(true)} aria-label="Äänet">🔊</button>
           )}
-          {solo && <span style={{ width: 40 }} />}
         </div>
       </header>
 
@@ -263,16 +335,22 @@ export default function FlagRoom() {
                   </section>
                 </>
               )}
-              <FlagSettingsPanel settings={room.settings} editable={isHost} onChange={changeSettings} />
-              <div className="flag-start">
-                {isHost ? (
-                  <button className="btn btn-primary btn-block btn-lg" onClick={() => socket?.emit('fq:start', {})}>
-                    {solo ? 'Aloita' : `Aloita peli (${connectedCount} ${connectedCount === 1 ? 'pelaaja' : 'pelaajaa'})`}
-                  </button>
-                ) : (
-                  <p className="faint waiting-host">Odotetaan, että host aloittaa pelin…</p>
-                )}
-              </div>
+              {room.practice ? (
+                <p className="muted center-text">Aloitetaan harjoitus…</p>
+              ) : (
+                <>
+                  <FlagSettingsPanel settings={room.settings} editable={isHost} onChange={changeSettings} />
+                  <div className="flag-start">
+                    {isHost ? (
+                      <button className="btn btn-primary btn-block btn-lg" onClick={start}>
+                        {solo ? 'Aloita' : `Aloita peli (${connectedCount} ${connectedCount === 1 ? 'pelaaja' : 'pelaajaa'})`}
+                      </button>
+                    ) : (
+                      <p className="faint waiting-host">Odotetaan, että host aloittaa pelin…</p>
+                    )}
+                  </div>
+                </>
+              )}
             </motion.div>
           )}
 
@@ -283,35 +361,39 @@ export default function FlagRoom() {
                   {countdown}
                 </motion.span>
               </AnimatePresence>
-              <p className="muted">{LEVEL_BY_VALUE[room.settings.level].emoji} {LEVEL_BY_VALUE[room.settings.level].label} · {room.settings.count} lippua</p>
+              <p className="muted">
+                {room.practice ? `📚 Harjoitus · ${room.practice} lippua` : `${LEVEL_BY_VALUE[room.settings.level].emoji} ${LEVEL_BY_VALUE[room.settings.level].label} · ${room.settings.count} lippua`}
+              </p>
             </div>
           )}
 
-          {phase === 'question' && question && (
+          {(phase === 'question' || phase === 'reveal') && question && (
             <>
               <FlagQuestionView
+                key={question.index}
                 question={question}
+                reveal={phase === 'reveal' ? reveal : null}
+                myUserId={user?.id}
+                players={room.players}
                 answered={myAnswer?.index === question.index}
                 myAnswer={myAnswer?.index === question.index ? myAnswer.value : null}
                 hint={hint}
                 hintsLeft={hintsLeft}
+                paused={paused}
                 onAnswer={answer}
                 onHint={(type) => socket?.emit('fq:hint', { index: question.index, type })}
               />
               {!solo && (
                 <div className="flag-status">
-                  <FlagPlayerChips players={room.players} myUserId={user?.id} bubbles={bubbles} showScore showAnswered />
-                  <p className="faint">{answeredCount}/{connectedCount} vastannut</p>
+                  <FlagPlayerChips players={room.players} myUserId={user?.id} bubbles={bubbles} showScore showAnswered={phase === 'question'} />
+                  {phase === 'question' && <p className="faint">{answeredCount}/{connectedCount} vastannut</p>}
                 </div>
               )}
             </>
           )}
 
-          {phase === 'reveal' && reveal && (
-            <>
-              <FlagRevealView reveal={reveal} myUserId={user?.id} players={room.players} />
-              {!solo && <FlagPlayerChips players={room.players} myUserId={user?.id} bubbles={bubbles} showScore showAnswered={false} />}
-            </>
+          {phase === 'reveal' && reveal && !question && (
+            <FlagRevealView reveal={reveal} myUserId={user?.id} players={room.players} />
           )}
 
           {phase === 'over' && over && (
@@ -322,22 +404,34 @@ export default function FlagRoom() {
               solo={solo}
               onReplay={() => socket?.emit('fq:start', {})}
               onSettings={() => socket?.emit('fq:toLobby')}
+              onPractice={practice}
               onExit={leave}
             />
           )}
         </main>
       )}
 
+      <PauseMenu
+        visible={paused && !audioOpen && !chatOpen}
+        iAmReady={iAmReady}
+        readyCount={room?.paused?.ready.length ?? 0}
+        readyTotal={room?.paused?.total ?? 1}
+        pausedByName={solo ? null : room?.paused?.byName ?? null}
+        rules={<FlagRules />}
+        showChat={!solo}
+        resumeNote="Aika on pysähtynyt kaikilta ja jatkuu siitä, mihin jäätiin."
+        exitText={solo ? 'Peli päättyy, eikä tulosta tallenneta.' : 'Muut jatkavat ilman sinua. Pisteesi jäävät tulokseen, ja voit palata huoneeseen samalla koodilla.'}
+        onToggleReady={() => socket?.emit('fq:ready', { ready: !iAmReady })}
+        onOpenAudio={() => setAudioOpen(true)}
+        onOpenChat={() => { setChatOpen(true); setUnread(0); }}
+        unread={unread}
+        lastMessage={lastMessage ? { name: lastMessage.userId === user?.id ? 'Sinä' : lastMessage.username, text: lastMessage.text } : null}
+        onExit={leave}
+      />
+
       <InviteFriendsSheet open={inviteOpen} onClose={() => setInviteOpen(false)} roomCode={roomCode ?? ''} memberIds={memberIds} />
+      <AudioSettingsSheet open={audioOpen} onClose={() => setAudioOpen(false)} />
       <ChatSheet open={chatOpen} messages={chat} myUserId={user?.id} onSend={sendChat} onClose={() => { setChatOpen(false); setUnread(0); }} />
-      <Modal open={confirmLeave} label="Poistu pelistä" onBackdrop={() => setConfirmLeave(false)}>
-        <h2 className="sheet-title">Poistutaanko pelistä?</h2>
-        <p className="sheet-sub">Muut jatkavat ilman sinua. Pisteesi jäävät tulokseen, ja voit palata huoneeseen samalla koodilla.</p>
-        <div className="sheet-actions">
-          <button className="btn btn-danger btn-block" onClick={leave}>Poistu</button>
-          <button className="btn btn-ghost btn-block" onClick={() => setConfirmLeave(false)}>Jatka peliä</button>
-        </div>
-      </Modal>
     </div>
   );
 }
