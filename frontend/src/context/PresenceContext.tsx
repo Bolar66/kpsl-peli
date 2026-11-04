@@ -10,7 +10,7 @@ import { sfx } from '../constants/sound';
 import { syncPushSubscription } from '../constants/push';
 
 type Toast =
-  | { id: number; kind: 'invite'; from: FriendUser; roomCode: string; game: string }
+  | { id: number; kind: 'invite'; from: FriendUser; roomCode: string; game: string; path: string }
   | { id: number; kind: 'request'; from: FriendUser }
   | { id: number; kind: 'accepted'; from: FriendUser };
 
@@ -66,7 +66,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
     socket.on('friends:request', ({ from }: { from: FriendUser }) => { refresh(); pushToast({ kind: 'request', from }); });
     socket.on('friends:accepted', ({ by }: { by: FriendUser }) => { refresh(); pushToast({ kind: 'accepted', from: by }); });
     socket.on('friends:changed', refresh);
-    socket.on('invite', (data: { from: FriendUser; roomCode: string; game: string }) => pushToast({ kind: 'invite', ...data }));
+    socket.on('invite', (data: { from: FriendUser; roomCode: string; game: string; path: string }) => pushToast({ kind: 'invite', ...data }));
     socket.on('connect_error', (err: Error) => { if (err.message === 'Virheellinen token') logout(); });
     return () => { socket.disconnect(); };
   }, [token, refresh, pushToast, logout]);
@@ -77,11 +77,11 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
 
   function open(toast: Toast) {
     dismiss(toast.id);
-    navigate(toast.kind === 'invite' ? `/room/${toast.roomCode}` : '/kaverit');
+    navigate(toast.kind === 'invite' ? toast.path : '/kaverit');
   }
 
   // Kutsua samaan huoneeseen, jossa jo ollaan, ei näytetä
-  const visible = toasts.filter(t => !(t.kind === 'invite' && location.pathname === `/room/${t.roomCode}`));
+  const visible = toasts.filter(t => !(t.kind === 'invite' && location.pathname === t.path));
 
   return (
     <PresenceContext.Provider value={{ incomingCount: token ? incomingCount : 0, version, refresh }}>

@@ -4,7 +4,7 @@ import jwt from 'jsonwebtoken';
 import { pool } from '../db/pool';
 import { authenticateToken, AuthRequest } from '../middleware/auth';
 import { validateEmail, validatePassword, validateUsername } from '../utils/validation';
-import { getUserStats, parseRange } from '../db/statsQueries';
+import { getFlagStats, getUserStats, parseRange } from '../db/statsQueries';
 import { assignFriendCode } from '../utils/friendCode';
 
 const router = Router();
@@ -52,8 +52,12 @@ router.get('/me', authenticateToken, async (req: AuthRequest, res: Response) => 
     if (!user.friend_code && user.password_hash !== GUEST_PASSWORD_MARKER) {
       user.friend_code = await assignFriendCode(user.id);
     }
-    const stats = await getUserStats(req.userId!, parseRange(req.query.range), { includeOpponents: true });
-    res.json({ profile: toProfile(user), stats });
+    const range = parseRange(req.query.range);
+    const [stats, flagStats] = await Promise.all([
+      getUserStats(req.userId!, range, { includeOpponents: true }),
+      getFlagStats(req.userId!, range),
+    ]);
+    res.json({ profile: toProfile(user), stats, flagStats });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Palvelinvirhe' });

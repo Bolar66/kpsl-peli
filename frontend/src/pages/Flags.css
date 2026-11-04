@@ -1,0 +1,217 @@
+/* ---------- Lippuvisan valikko ---------- */
+.flag-mode-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.card.flag-mode {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 16px;
+  text-align: left;
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  transition: transform 0.15s var(--ease), border-color 0.15s ease;
+}
+.card.flag-mode:active { transform: scale(0.97); }
+.card.flag-mode.accent { border-color: var(--accent-line); }
+.card.flag-mode b { font-size: 16px; font-family: var(--font-display); }
+.card.flag-mode span:last-child { font-size: 13px; color: var(--text-2); }
+.flag-mode-emoji { font-size: 28px; margin-bottom: 4px; }
+
+.records-card { display: flex; flex-direction: column; gap: 10px; }
+.records-card .section-head { margin-bottom: 0; }
+.level-seg button { padding-inline: 4px; }
+@media (max-width: 420px) { .level-seg-label { display: none; } .level-seg button { font-size: 20px; } }
+.record-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.record-list li { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: var(--radius-sm); }
+.record-list li.me { background: var(--accent-soft); }
+.record-rank { width: 26px; text-align: center; }
+.record-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.record-score { font-family: var(--font-display); font-size: 17px; }
+
+/* ---------- Lippuvisan huone ---------- */
+.flag-main { width: 100%; max-width: 480px; display: flex; flex-direction: column; gap: 14px; padding-bottom: 24px; }
+.flag-lobby { display: flex; flex-direction: column; gap: 14px; }
+.center-text { text-align: center; margin-top: 40px; }
+.waiting-host { text-align: center; margin: 8px 0; }
+.flag-start { position: sticky; bottom: 12px; z-index: 5; }
+.btn-lg { min-height: 54px; font-size: 17px; }
+
+.flag-settings { display: flex; flex-direction: column; gap: 14px; }
+.flag-settings .section-head { margin-bottom: 0; }
+.level-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.level-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.level-card.active { border-color: var(--accent-line); background: var(--accent-soft); }
+.level-card:disabled { cursor: default; }
+.flag-settings.readonly .level-card:not(.active) { opacity: 0.5; }
+.level-card b { font-size: 14px; }
+.level-card span:last-child { font-size: 12px; color: var(--text-2); line-height: 1.3; }
+.level-emoji { font-size: 22px; }
+.setting-row { display: flex; flex-direction: column; gap: 6px; }
+.extra-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.extra-toggle {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+.extra-toggle b { font-size: 13px; }
+.extra-toggle span { font-size: 11px; color: var(--text-3); }
+.extra-toggle.on { border-color: var(--accent-line); background: var(--accent-soft); }
+.extra-toggle:disabled { cursor: default; opacity: 0.45; }
+.extra-toggle.on:disabled { opacity: 1; }
+
+/* Pelaajat */
+.flag-players { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 10px 14px; justify-content: center; }
+.flag-players li { display: flex; flex-direction: column; align-items: center; gap: 2px; width: 64px; }
+.flag-players li.away { opacity: 0.4; }
+.flag-player-avatar { position: relative; display: inline-flex; }
+.answered-mark {
+  position: absolute;
+  right: -4px;
+  bottom: -2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 11px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.flag-player-name { font-size: 12px; max-width: 64px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.flag-players li.me .flag-player-name { color: var(--accent-text); font-weight: 600; }
+.flag-player-score { font-family: var(--font-display); font-size: 14px; }
+.flag-status { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.flag-status p { margin: 0; font-size: 12px; }
+
+/* Lähtölaskenta */
+.flag-countdown { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; min-height: 50dvh; }
+.flag-countdown span { font-family: var(--font-display); font-size: 96px; font-weight: 700; color: var(--accent-text); line-height: 1; }
+
+/* Kysymys */
+.flag-question { display: flex; flex-direction: column; gap: 14px; }
+.flag-timer { height: 6px; border-radius: 999px; background: var(--surface-3); overflow: hidden; }
+.flag-timer-fill { height: 100%; background: var(--accent); transform-origin: left center; }
+.flag-timer-fill.low { background: var(--danger); }
+.flag-timer-fill.stopped { opacity: 0.4; }
+
+.flag-frame {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  max-height: 34dvh;
+  margin: 0 auto;
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--surface-2);
+  box-shadow: 0 10px 30px var(--shadow-color), 0 0 0 1px var(--border);
+}
+.flag-frame img { width: 100%; height: 100%; object-fit: contain; display: block; user-select: none; -webkit-user-drag: none; }
+.flag-prompt { margin: 0; text-align: center; font-size: 16px; color: var(--text-2); }
+.flag-prompt b { color: var(--text); }
+.flag-options { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.flag-options.two .flag-option { min-height: 64px; font-size: 18px; }
+.flag-option {
+  min-height: 56px;
+  padding: 8px 10px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  font-size: 15px;
+  line-height: 1.2;
+  cursor: pointer;
+  transition: transform 0.12s var(--ease), border-color 0.15s ease, background 0.15s ease, opacity 0.2s ease;
+}
+.flag-option:active:not(:disabled) { transform: scale(0.96); }
+.flag-option.picked { border-color: var(--accent-line); background: var(--accent-soft); }
+.flag-option:disabled:not(.picked) { opacity: 0.45; cursor: default; }
+.flag-option.yes.picked { background: var(--accent-soft); }
+.flag-option-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.flag-option-img {
+  aspect-ratio: 4 / 3;
+  padding: 0;
+  border-radius: var(--radius);
+  border: 2px solid var(--border);
+  background: var(--surface-2);
+  overflow: hidden;
+  cursor: pointer;
+  transition: transform 0.12s var(--ease), border-color 0.15s ease, opacity 0.2s ease;
+}
+.flag-option-img img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.flag-option-img.picked { border-color: var(--accent-line); }
+.flag-option-img:disabled:not(.picked) { opacity: 0.35; cursor: default; }
+.flag-write { display: flex; flex-wrap: wrap; gap: 8px; }
+.flag-write .input { flex: 1; min-width: 0; font-size: 18px; }
+.flag-letters { width: 100%; margin: 0; white-space: pre-wrap; text-align: center; font-family: var(--font-display); font-size: 20px; letter-spacing: 0.08em; color: var(--accent-text); }
+.flag-hint-row { min-height: 36px; display: flex; justify-content: center; align-items: center; font-size: 13px; }
+
+/* Paljastus */
+.flag-reveal { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.flag-answer-name { margin: 4px 0 0; font-size: 26px; text-align: center; }
+.flag-verdict { display: flex; align-items: center; gap: 10px; font-size: 18px; font-weight: 700; padding: 6px 14px; border-radius: 999px; }
+.flag-verdict.full { background: var(--accent-soft); color: var(--accent-text); }
+.flag-verdict.half { background: var(--warn-soft); color: var(--warn); }
+.flag-verdict.wrong, .flag-verdict.none { background: var(--danger-soft); color: var(--danger); }
+.flag-your-answer { margin: 0; font-size: 13px; }
+.flag-others { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+.flag-others li { display: flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: var(--surface-2); font-size: 13px; }
+.flag-others li.full .flag-result-icon { color: var(--accent-text); }
+.flag-others li.half .flag-result-icon { color: var(--warn); }
+.flag-others li.wrong .flag-result-icon, .flag-others li.none .flag-result-icon { color: var(--danger); }
+.flag-result-icon { font-weight: 800; }
+
+/* Pelin loppu */
+.flag-over { display: flex; flex-direction: column; gap: 14px; }
+.flag-over-head { display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; padding-top: 8px; }
+.flag-over-head h1 { margin: 0; font-size: 30px; }
+.flag-over-head p { margin: 0; }
+.flag-over-trophy { font-size: 52px; line-height: 1; }
+.record-badge { padding: 4px 12px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); font-weight: 800; font-size: 14px; }
+.flag-standings { margin: 0; }
+.flag-standings li { gap: 10px; }
+.flag-standings li.me .standing-name { color: var(--accent-text); font-weight: 600; }
+.flag-fact { display: flex; gap: 12px; align-items: flex-start; }
+.flag-fact img { width: 72px; flex-shrink: 0; border-radius: 6px; box-shadow: 0 0 0 1px var(--border); }
+.flag-fact p { margin: 0; font-size: 14px; line-height: 1.45; }
+.flag-fact .eyebrow { margin-bottom: 4px; }
+.flag-summary { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; overflow: hidden; }
+.flag-summary li { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--border); font-size: 14px; }
+.flag-summary li:first-child { border-top: none; }
+.flag-summary img { width: 40px; border-radius: 4px; box-shadow: 0 0 0 1px var(--border); }
+.summary-name { flex: 1; min-width: 0; }
+.flag-summary .flag-result-icon { width: 22px; text-align: center; }
+.flag-result-icon.full { color: var(--accent-text); }
+.flag-result-icon.half { color: var(--warn); }
+.flag-result-icon.wrong, .flag-result-icon.none { color: var(--danger); }
+.setting-row { align-items: stretch; text-align: left; }
+.setting-row .seg { display: flex; width: 100%; }
+.setting-row .seg button { flex: 1; }
+.flag-settings .section-head { text-align: left; }

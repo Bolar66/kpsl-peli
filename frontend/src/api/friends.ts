@@ -1,6 +1,6 @@
 import { API_URL } from '../config';
 import { AuthError } from './games';
-import type { ProfileStats, StatsRange } from './profile';
+import type { FlagStatRow, ProfileStats, StatsRange } from './profile';
 
 export interface FriendUser {
   id: number;
@@ -66,7 +66,7 @@ export function removeFriend(token: string, userId: number) {
 }
 
 export function getFriendProfile(token: string, userId: number, range: StatsRange) {
-  return request<{ profile: PublicProfile; stats: ProfileStats; headToHead: HeadToHead }>(token, `/${userId}/profile?range=${range}`);
+  return request<{ profile: PublicProfile; stats: ProfileStats; headToHead: HeadToHead; flagStats: FlagStatRow[]; flagHeadToHead: HeadToHead }>(token, `/${userId}/profile?range=${range}`);
 }
 
 export function inviteFriend(token: string, userId: number, roomCode: string) {

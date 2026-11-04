@@ -5,8 +5,14 @@ import type { Namespace } from 'socket.io';
 // vaikuta pelin kulkuun.
 let presence: Namespace | null = null;
 const socketCounts = new Map<number, number>();
-let inGameResolver: (userId: number) => boolean = () => false;
-let roomMemberResolver: (userId: number, roomCode: string) => boolean = () => false;
+interface RoomResolvers {
+  // Pelin nimi ja huoneen osoite kutsuja varten
+  name: string;
+  path: (roomCode: string) => string;
+  inGame: (userId: number) => boolean;
+  isInRoom: (userId: number, roomCode: string) => boolean;
+}
+const resolvers: RoomResolvers[] = [];
 
 export function attachPresence(ns: Namespace) {
   presence = ns;
@@ -22,22 +28,20 @@ export function userDisconnected(userId: number) {
   else socketCounts.set(userId, left);
 }
 
-// Pelihuoneiden tila on index.ts:ssä; se kertoo tänne, kuka pelaa ja kuka on missäkin huoneessa
-export function setRoomResolvers(resolvers: {
-  inGame: (userId: number) => boolean;
-  isInRoom: (userId: number, roomCode: string) => boolean;
-}) {
-  inGameResolver = resolvers.inGame;
-  roomMemberResolver = resolvers.isInRoom;
+// Pelihuoneiden tila on kunkin pelin omassa moduulissa; ne kertovat tänne, kuka pelaa ja kuka on missäkin huoneessa
+export function addRoomResolvers(game: RoomResolvers) {
+  resolvers.push(game);
 }
 
 export function getPresence(userId: number): 'offline' | 'online' | 'playing' {
-  if (inGameResolver(userId)) return 'playing';
+  if (resolvers.some(r => r.inGame(userId))) return 'playing';
   return socketCounts.has(userId) ? 'online' : 'offline';
 }
 
-export function isInRoom(userId: number, roomCode: string) {
-  return roomMemberResolver(userId, roomCode);
+// Peli, jonka huoneessa käyttäjä on (kutsu vie kaverin samaan huoneeseen)
+export function findRoomGame(userId: number, roomCode: string): { name: string; path: string } | null {
+  const game = resolvers.find(r => r.isInRoom(userId, roomCode));
+  return game ? { name: game.name, path: game.path(roomCode) } : null;
 }
 
 export function isOnline(userId: number) {

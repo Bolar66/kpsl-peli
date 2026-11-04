@@ -8,13 +8,16 @@ import path from 'path';
 import fs from 'fs';
 import { pool } from './db/pool';
 import { clampNumber, parseRoomCode } from './utils/validation';
+import { CHAT_HISTORY, EMOTES, cleanChatText, nextChatId, type ChatMessage } from './utils/chat';
 import authRoutes from './routes/auth';
 import gameRoutes from './routes/games';
 import profileRoutes from './routes/profile';
 import feedbackRoutes from './routes/feedback';
 import friendRoutes from './routes/friends';
 import pushRoutes from './routes/push';
-import { attachPresence, setRoomResolvers, userConnected, userDisconnected } from './realtime/presence';
+import flagRoutes from './routes/flags';
+import { attachFlagQuiz } from './flags/engine';
+import { addRoomResolvers, attachPresence, userConnected, userDisconnected } from './realtime/presence';
 import {
   getGameIdByRoomCode, getLatestGameByRoomCode, getUserAvatar, markGameStarted, saveRound, finalizeGame, createGameRow,
 } from './db/gameQueries';
@@ -52,6 +55,7 @@ app.use('/api/profile', profileRoutes);
 app.use('/api/feedback', feedbackRoutes);
 app.use('/api/friends', friendRoutes);
 app.use('/api/push', pushRoutes);
+app.use('/api/flags', flagRoutes);
 
 const httpServer = createServer(app);
 const io = new Server(httpServer, { cors: { origin: '*' } });
@@ -120,6 +124,9 @@ presenceNs.on('connection', (socket: AuthenticatedSocket) => {
 });
 attachPresence(presenceNs);
 
+// Lippuvisan huoneet omassa nimiavaruudessaan
+attachFlagQuiz(io.of('/flags'), authenticateSocket);
+
 interface RoomPlayer {
   socketId: string;
   userId: number;
@@ -181,36 +188,14 @@ const gameOverWinnerByRoom: Record<string, string | null> = {};
 const easterEggUsedByRoom: Record<string, boolean> = {};
 
 // ---------- Chat ja emotet ----------
-interface ChatMessage {
-  id: number;
-  userId: number;
-  username: string;
-  text: string;
-  emote: boolean;
-  at: number;
-}
-const CHAT_HISTORY = 30;
-const CHAT_MAX_LENGTH = 120;
-// Sallitut emotet (pikapalkki); muut emojit kulkevat tavallisina viesteinä
-const EMOTES = new Set(['😂', '🔥', '👏', '😎', '😤', '🤯', '💀', '🙏', '😭', '🫡', '👀', '🍿']);
 const chatByRoom: Record<string, ChatMessage[]> = {};
-let nextChatId = 1;
 
-// Viestin siivous: ohjausmerkit ja näkymättömät suunnanvaihtomerkit pois, välilyönnit tiivistettynä
-function cleanChatText(value: unknown): string | null {
-  if (typeof value !== 'string') return null;
-  const text = value
-    // Ohjausmerkit, n\u00e4kym\u00e4tt\u00f6m\u00e4t v\u00e4lit ja suunnanvaihtomerkit pois (yhdist\u00e4v\u00e4 \u200d s\u00e4ilyy emojeja varten)
-    .replace(/[\u0000-\u001f\u007f\u200b\u200c\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-  if (!text) return null;
-  return Array.from(text).slice(0, CHAT_MAX_LENGTH).join('');
-}
 const roomCreatorByRoom: Record<string, number> = {};
 
 // Kaverilista näyttää, kuka pelaa juuri nyt, ja kutsun voi lähettää vain huoneesta, jossa on itse
-setRoomResolvers({
+addRoomResolvers({
+  name: 'Kivi, paperi, sakset',
+  path: (roomCode) => `/room/${roomCode}`,
   inGame: (userId) => Object.keys(roomPlayers).some(code =>
     gameStarted[code] && roomPlayers[code]!.some(p => p.userId === userId && p.isConnected && !p.isBot)),
   isInRoom: (userId, roomCode) => !!roomPlayers[roomCode]?.some(p => p.userId === userId && !p.isBot),
@@ -1179,7 +1164,7 @@ io.on('connection', (socket: AuthenticatedSocket) => {
     chatTokens -= 1;
 
     const message: ChatMessage = {
-      id: nextChatId++, userId: sender.userId, username: sender.username, text: content, emote: isEmote, at: now,
+      id: nextChatId(), userId: sender.userId, username: sender.username, text: content, emote: isEmote, at: now,
     };
     const history = (chatByRoom[roomCode] ??= []);
     history.push(message);

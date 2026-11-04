@@ -236,3 +236,6 @@
 .push-prompt { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 4px; }
 .push-prompt .sheet-actions { width: 100%; }
 .push-prompt-note { margin: 0 0 8px; font-size: 13px; }
+
+.game-card-art.flags img { width: 52px; height: 39px; object-fit: cover; border-radius: 8px; box-shadow: 0 0 0 1px var(--border); }
+.coming-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }

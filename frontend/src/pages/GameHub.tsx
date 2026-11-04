@@ -15,7 +15,6 @@ import './Lobby.css';
 // Tulevat pelit näytetään valikossa lukittuina, jotta pelaajat näkevät mitä on tulossa
 const COMING_SOON = [
   { emoji: '🧠', title: 'Tietovisa', text: 'Kuka tietää eniten?' },
-  { emoji: '🌍', title: 'Lippuvisa', text: 'Tunnista maat lipuista' },
   { emoji: '🎲', title: 'Noppapelit', text: 'Tuuria ja taktiikkaa' },
 ];
 
@@ -54,6 +53,18 @@ export default function GameHub() {
             <p className="eyebrow">2–4 pelaajaa · reaaliajassa</p>
             <h2 className="game-card-title">Kivi, paperi, sakset</h2>
             <p className="muted game-card-text">Klassinen tai Lisko–Spock. Luo huone ja kutsu kaverit.</p>
+          </div>
+          <span className="game-card-go" aria-hidden="true">→</span>
+        </Link>
+
+        <Link to="/lippu" className="card game-card">
+          <div className="game-card-art flags" aria-hidden="true">
+            <img src="/flags/fi.svg" alt="" /><img src="/flags/br.svg" alt="" /><img src="/flags/jp.svg" alt="" />
+          </div>
+          <div className="game-card-body">
+            <p className="eyebrow">Yksin tai kavereiden kanssa</p>
+            <h2 className="game-card-title">Lippuvisa</h2>
+            <p className="muted game-card-text">Tunnista maailman liput neljällä vaikeustasolla.</p>
           </div>
           <span className="game-card-go" aria-hidden="true">→</span>
         </Link>

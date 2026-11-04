@@ -6,9 +6,15 @@ import { markWhatsNewSeen } from '../constants/whatsNew';
 
 const SLIDES = [
   {
+    art: <span className="whats-new-emoji">🌍</span>,
+    title: 'Uusi peli: Lippuvisa',
+    text: 'Tunnista maailman liput neljällä tasolla: Turisti, Reppureissaaja, Maailmanmatkaaja ja Arpajaiset. Pelaa yksin ja tee ennätyksiä, tai haasta kaverit samaan huoneeseen.',
+    tip: 'Kirjoitusvastauksissa kelpaavat suomen- ja englanninkieliset nimet, ja pienestä kirjoitusvirheestä saa puolet pisteistä.',
+  },
+  {
     art: <BowlMark size={72} />,
     title: 'Uusi nimi: BOWL',
-    text: 'KPSL on nyt BOWL — kulhollinen pelejä kavereiden kanssa. Kivi, paperi, sakset löytyy pelivalikosta, ja tietovisat, lippuvisat ja noppapelit ovat tulossa.',
+    text: 'KPSL on nyt BOWL — kulhollinen pelejä kavereiden kanssa. Kaikki pelit löytyvät pelivalikosta, ja tietovisat ja noppapelit ovat tulossa.',
     tip: 'iPhonella: poista vanha ikoni ja lisää BOWL uudelleen kotinäytölle, niin saat uuden logon.',
   },
   {

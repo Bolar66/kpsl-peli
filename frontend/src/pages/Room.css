@@ -1008,3 +1008,11 @@
   text-overflow: ellipsis;
   cursor: pointer;
 }
+
+/* Kapeilla näytöillä huonekoodi ja kutsunapit mahtuvat samalle riville */
+@media (max-width: 400px) {
+  .code-big { gap: 5px; }
+  .code-big span { width: 40px; height: 50px; font-size: 24px; }
+  .share-btn { padding: 0 10px; font-size: 13px; }
+}
+.code-block { flex-wrap: wrap; }

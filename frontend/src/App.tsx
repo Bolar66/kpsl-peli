@@ -15,6 +15,8 @@ import ServerWake from './components/ServerWake';
 import { PresenceProvider } from './context/PresenceContext';
 import Friends from './pages/Friends';
 import PlayerProfile from './pages/PlayerProfile';
+import FlagMenu from './pages/FlagMenu';
+import FlagRoom from './pages/FlagRoom';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { token } = useAuth();
@@ -27,7 +29,7 @@ function AppRoutes() {
   const location = useLocation();
   // Valikoissa soi rauhallinen musiikki; pelihuone vaihtaa itse pelimusiikkiin
   useEffect(() => {
-    if (!location.pathname.startsWith('/room/')) setMusic('menu');
+    if (!location.pathname.startsWith('/room/') && !/^\/lippu\/./.test(location.pathname)) setMusic('menu');
   }, [location.pathname]);
 
   return (
@@ -65,6 +67,22 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <Profile />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/lippu"
+        element={
+          <ProtectedRoute>
+            <FlagMenu />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/lippu/:roomCode"
+        element={
+          <ProtectedRoute>
+            <FlagRoom />
           </ProtectedRoute>
         }
       />

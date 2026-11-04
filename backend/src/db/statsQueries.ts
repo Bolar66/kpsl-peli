@@ -102,3 +102,64 @@ export async function getHeadToHead(meId: number, otherId: number) {
   const row = result.rows[0];
   return { games: row.games, myWins: row.my_wins, theirWins: row.their_wins };
 }
+
+// ---------- Lippuvisa ----------
+
+// Käyttäjän lippuvisapelit aikavälin mukaan
+function flagGames(range: StatsRange) {
+  const base = `
+    SELECT g.id, g.level, g.question_count, g.solo, g.created_at, fp.score, fp.correct, fp.half, fp.answer_ms, fp.placement,
+           (SELECT COUNT(*) FROM flag_game_players o WHERE o.game_id = g.id) AS players
+      FROM flag_game_players fp
+      JOIN flag_games g ON g.id = fp.game_id
+     WHERE fp.user_id = $1`;
+  if (range === 'last5') return `SELECT * FROM (${base}) fg ORDER BY id DESC LIMIT 5`;
+  if (range === 'last20') return `SELECT * FROM (${base}) fg ORDER BY id DESC LIMIT 20`;
+  if (range === '30d') return `SELECT * FROM (${base}) fg WHERE created_at > now() - interval '30 days'`;
+  return base;
+}
+
+// Tasoittain: pelit, moninpelien voitot, oikeiden osuus, keskimääräinen vastausaika ja yksinpelin ennätykset
+export async function getFlagStats(userId: number, range: StatsRange) {
+  const result = await pool.query(
+    `SELECT level,
+            COUNT(*)::int AS games,
+            COUNT(*) FILTER (WHERE NOT solo AND players > 1)::int AS multi_games,
+            COUNT(*) FILTER (WHERE NOT solo AND players > 1 AND placement = 1)::int AS wins,
+            COALESCE(SUM(correct), 0)::int AS correct,
+            COALESCE(SUM(half), 0)::int AS half,
+            COALESCE(SUM(question_count), 0)::int AS questions,
+            COALESCE(SUM(answer_ms), 0)::bigint AS answer_ms,
+            MAX(score) FILTER (WHERE solo)::int AS best_solo
+       FROM (${flagGames(range)}) fg
+      GROUP BY level`,
+    [userId]
+  );
+  return result.rows.map(r => ({
+    level: r.level,
+    games: r.games,
+    multiGames: r.multi_games,
+    wins: r.wins,
+    correct: r.correct,
+    half: r.half,
+    questions: r.questions,
+    // Keskimääräinen aika oikeaan vastaukseen millisekunteina
+    avgAnswerMs: r.correct > 0 ? Math.round(Number(r.answer_ms) / r.correct) : null,
+    bestSolo: r.best_solo,
+  }));
+}
+
+// Lippuvisan keskinäiset ottelut: yhteiset moninpelit ja kummankin parempi sijoitus
+export async function getFlagHeadToHead(meId: number, otherId: number) {
+  const result = await pool.query(
+    `SELECT COUNT(*)::int AS games,
+            COUNT(*) FILTER (WHERE me.placement < them.placement)::int AS my_wins,
+            COUNT(*) FILTER (WHERE them.placement < me.placement)::int AS their_wins
+       FROM flag_game_players me
+       JOIN flag_game_players them ON them.game_id = me.game_id AND them.user_id = $2
+      WHERE me.user_id = $1`,
+    [meId, otherId]
+  );
+  const row = result.rows[0];
+  return { games: row.games, myWins: row.my_wins, theirWins: row.their_wins };
+}

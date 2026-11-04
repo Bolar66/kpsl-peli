@@ -5,7 +5,9 @@ import { useAuth } from '../context/AuthContext';
 import { usePresence } from '../context/PresenceContext';
 import { AuthError, createGame } from '../api/games';
 import { getFriendProfile, removeFriend, type HeadToHead, type PublicProfile } from '../api/friends';
-import type { ProfileStats, StatsRange } from '../api/profile';
+import type { FlagStatRow, ProfileStats, StatsRange } from '../api/profile';
+import FlagStatsPanel from '../components/FlagStatsPanel';
+import GameSwitch, { type StatsGame } from '../components/GameSwitch';
 import AppHeader from '../components/AppHeader';
 import Avatar from '../components/Avatar';
 import Modal from '../components/Modal';
@@ -27,6 +29,9 @@ export default function PlayerProfile() {
   const [profile, setProfile] = useState<PublicProfile | null>(null);
   const [stats, setStats] = useState<ProfileStats | null>(null);
   const [headToHead, setHeadToHead] = useState<HeadToHead | null>(null);
+  const [flagStats, setFlagStats] = useState<FlagStatRow[] | null>(null);
+  const [flagHeadToHead, setFlagHeadToHead] = useState<HeadToHead | null>(null);
+  const [game, setGame] = useState<StatsGame>('kpsl');
   const [range, setRange] = useState<StatsRange>('all');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -42,11 +47,13 @@ export default function PlayerProfile() {
     if (!token || !Number.isInteger(id)) return;
     let cancelled = false;
     getFriendProfile(token, id, range)
-      .then(d => { if (!cancelled) { setProfile(d.profile); setStats(d.stats); setHeadToHead(d.headToHead); } })
+      .then(d => { if (!cancelled) { setProfile(d.profile); setStats(d.stats); setHeadToHead(d.headToHead); setFlagStats(d.flagStats); setFlagHeadToHead(d.flagHeadToHead); } })
       .catch(handleError)
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [token, id, range, handleError]);
+
+  const h2h = game === 'kpsl' ? headToHead : flagHeadToHead;
 
   async function invite() {
     setBusy(true);
@@ -90,22 +97,24 @@ export default function PlayerProfile() {
               <button className="btn btn-primary btn-sm" onClick={invite} disabled={busy}>Kutsu peliin</button>
             </ProfileHeader>
 
-            {headToHead && user && (
+            <GameSwitch value={game} onChange={setGame} />
+
+            {h2h && user && (
               <section className="card h2h-card">
-                <div className="section-head"><h2>Keskinäiset ottelut</h2><span className="faint">{headToHead.games} peliä</span></div>
-                {headToHead.games === 0 ? (
+                <div className="section-head"><h2>Keskinäiset ottelut</h2><span className="faint">{h2h.games} peliä</span></div>
+                {h2h.games === 0 ? (
                   <p className="muted empty-stats">Ette ole vielä pelanneet toisianne vastaan. Kutsu {profile.username} peliin!</p>
                 ) : (
                   <div className="h2h">
-                    <div className={`h2h-side ${headToHead.myWins >= headToHead.theirWins ? 'lead' : ''}`}>
+                    <div className={`h2h-side ${h2h.myWins >= h2h.theirWins ? 'lead' : ''}`}>
                       <Avatar player={{ userId: user.id, username: user.username, avatarEmoji: user.avatarEmoji, avatarColor: user.avatarColor, avatarImage: user.avatarImage }} size={40} />
-                      <b>{headToHead.myWins}</b>
+                      <b>{h2h.myWins}</b>
                       <span className="faint">Sinä</span>
                     </div>
                     <span className="h2h-vs">–</span>
-                    <div className={`h2h-side ${headToHead.theirWins >= headToHead.myWins ? 'lead' : ''}`}>
+                    <div className={`h2h-side ${h2h.theirWins >= h2h.myWins ? 'lead' : ''}`}>
                       <Avatar player={{ userId: profile.id, username: profile.username, avatarEmoji: profile.avatarEmoji, avatarColor: profile.avatarColor, avatarImage: profile.avatarImage }} size={40} />
-                      <b>{headToHead.theirWins}</b>
+                      <b>{h2h.theirWins}</b>
                       <span className="faint">{profile.username}</span>
                     </div>
                   </div>
@@ -113,9 +122,19 @@ export default function PlayerProfile() {
               </section>
             )}
 
-            {stats && (
+            {stats && game === 'kpsl' && (
               <StatsPanel
                 stats={stats}
+                range={range}
+                onRangeChange={(next) => { setLoading(true); setRange(next); }}
+                own={false}
+                loading={loading}
+              />
+            )}
+
+            {flagStats && game === 'flags' && (
+              <FlagStatsPanel
+                stats={flagStats}
                 range={range}
                 onRangeChange={(next) => { setLoading(true); setRange(next); }}
                 own={false}

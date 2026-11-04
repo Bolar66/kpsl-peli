@@ -4,9 +4,9 @@ import { authenticateToken, AuthRequest } from '../middleware/auth';
 import { rateLimit } from '../middleware/rateLimit';
 import { normalizeFriendCode } from '../utils/friendCode';
 import { parseRoomCode } from '../utils/validation';
-import { emitToUser, getPresence, isInRoom } from '../realtime/presence';
+import { emitToUser, findRoomGame, getPresence } from '../realtime/presence';
 import { sendPush } from '../utils/push';
-import { getHeadToHead, getUserStats, parseRange } from '../db/statsQueries';
+import { getFlagHeadToHead, getFlagStats, getHeadToHead, getUserStats, parseRange } from '../db/statsQueries';
 
 const router = Router();
 const GUEST_PASSWORD_MARKER = 'guest';
@@ -224,14 +224,19 @@ router.get('/:userId/profile', async (req: AuthRequest, res: Response) => {
     );
     const row = result.rows[0];
     if (!row) return res.status(404).json({ error: 'Pelaajaa ei löytynyt' });
-    const [stats, headToHead] = await Promise.all([
-      getUserStats(otherId, parseRange(req.query.range), { includeOpponents: false }),
+    const range = parseRange(req.query.range);
+    const [stats, headToHead, flagStats, flagHeadToHead] = await Promise.all([
+      getUserStats(otherId, range, { includeOpponents: false }),
       getHeadToHead(req.userId!, otherId),
+      getFlagStats(otherId, range),
+      getFlagHeadToHead(req.userId!, otherId),
     ]);
     res.json({
       profile: { ...publicUser(row), bio: row.bio, bannerImage: row.banner_image, createdAt: row.created_at, presence: getPresence(otherId) },
       stats,
       headToHead,
+      flagStats,
+      flagHeadToHead,
     });
   } catch (err) {
     console.error(err);
@@ -247,7 +252,8 @@ router.post('/:userId/invite', async (req: AuthRequest, res: Response) => {
   try {
     const friendship = await getFriendship(req.userId!, otherId);
     if (relationFor(req.userId!, friendship) !== 'friends') return res.status(403).json({ error: 'Voit kutsua vain kavereita' });
-    if (!isInRoom(req.userId!, roomCode)) return res.status(400).json({ error: 'Liity ensin huoneeseen' });
+    const game = findRoomGame(req.userId!, roomCode);
+    if (!game) return res.status(400).json({ error: 'Liity ensin huoneeseen' });
 
     const key = `${req.userId}:${otherId}`;
     const now = Date.now();
@@ -256,11 +262,11 @@ router.post('/:userId/invite', async (req: AuthRequest, res: Response) => {
 
     const me = await loadUser(req.userId!);
     if (!me) return res.status(404).json({ error: 'Käyttäjää ei löytynyt' });
-    emitToUser(otherId, 'invite', { from: publicUser(me), roomCode, game: 'Kivi, paperi, sakset' });
+    emitToUser(otherId, 'invite', { from: publicUser(me), roomCode, game: game.name, path: game.path });
     sendPush(otherId, {
       title: 'Pelikutsu',
-      body: `${me.username} kutsuu sinut peliin: Kivi, paperi, sakset`,
-      url: `/room/${roomCode}`,
+      body: `${me.username} kutsuu sinut peliin: ${game.name}`,
+      url: game.path,
       tag: `invite-${me.id}`,
     }).catch(err => console.error(err));
     res.json({ ok: true });

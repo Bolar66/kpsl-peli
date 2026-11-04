@@ -17,6 +17,18 @@ export interface Profile {
 
 export type StatsRange = 'all' | 'last5' | 'last20' | '30d';
 
+export interface FlagStatRow {
+  level: 'tourist' | 'backpacker' | 'globetrotter' | 'lottery';
+  games: number;
+  multiGames: number;
+  wins: number;
+  correct: number;
+  half: number;
+  questions: number;
+  avgAnswerMs: number | null;
+  bestSolo: number | null;
+}
+
 export interface SymbolStat {
   symbol: string;
   count: number;
@@ -75,7 +87,7 @@ async function request<T>(token: string, path: string, method = 'GET', body?: un
 }
 
 export function getMyProfile(token: string, range: StatsRange = 'all') {
-  return request<{ profile: Profile; stats: ProfileStats }>(token, `/me?range=${range}`);
+  return request<{ profile: Profile; stats: ProfileStats; flagStats: FlagStatRow[] }>(token, `/me?range=${range}`);
 }
 
 export function regenerateFriendCode(token: string) {

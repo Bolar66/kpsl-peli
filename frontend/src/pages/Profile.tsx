@@ -3,7 +3,9 @@ import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { AuthError } from '../api/games';
-import { deleteMyAccount, getMyProfile, setPassword, updateMyProfile, type Profile as ProfileData, type ProfileStats, type StatsRange } from '../api/profile';
+import { deleteMyAccount, getMyProfile, setPassword, updateMyProfile, type FlagStatRow, type Profile as ProfileData, type ProfileStats, type StatsRange } from '../api/profile';
+import FlagStatsPanel from '../components/FlagStatsPanel';
+import GameSwitch, { type StatsGame } from '../components/GameSwitch';
 import ProfileEditor from '../components/ProfileEditor';
 import ProfileHeader from '../components/ProfileHeader';
 import StatsPanel from '../components/StatsPanel';
@@ -24,6 +26,8 @@ export default function Profile() {
   const navigate = useNavigate();
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [stats, setStats] = useState<ProfileStats | null>(null);
+  const [flagStats, setFlagStats] = useState<FlagStatRow[] | null>(null);
+  const [game, setGame] = useState<StatsGame>('kpsl');
   const [error, setError] = useState('');
   const [editing, setEditing] = useState(false);
   const [passwordOpen, setPasswordOpen] = useState(false);
@@ -54,7 +58,7 @@ export default function Profile() {
     if (!token) return;
     let cancelled = false;
     getMyProfile(token, range)
-      .then(data => { if (!cancelled) { setProfile(data.profile); setStats(data.stats); } })
+      .then(data => { if (!cancelled) { setProfile(data.profile); setStats(data.stats); setFlagStats(data.flagStats); } })
       .catch(handleError)
       .finally(() => { if (!cancelled) setLoadingStats(false); });
     return () => { cancelled = true; };
@@ -112,7 +116,9 @@ export default function Profile() {
           </section>
         )}
 
-        {stats && <StatsPanel stats={stats} range={range} onRangeChange={changeRange} own loading={loadingStats} />}
+        {stats && <GameSwitch value={game} onChange={setGame} />}
+        {stats && game === 'kpsl' && <StatsPanel stats={stats} range={range} onRangeChange={changeRange} own loading={loadingStats} />}
+        {flagStats && game === 'flags' && <FlagStatsPanel stats={flagStats} range={range} onRangeChange={changeRange} own loading={loadingStats} />}
 
         {!stats && !error && <p className="muted">Ladataan…</p>}
 
