@@ -12,7 +12,8 @@ services:
       npm ci --prefix frontend --include=dev &&
       npm run build --prefix frontend &&
       npm run build --prefix backend
-    # Tietokannan migraatiot ajetaan aina ennen käynnistystä (ajetut ohitetaan)
+    # Tietokannan migraatiot ajetaan aina ennen käynnistystä (ajetut ohitetaan).
+    # migrate:up käyttää --no-lock: Neonin yhteyspooleri pitäisi lukon voimassa ja seuraava käynnistys kaatuisi.
     startCommand: npm run migrate:up --prefix backend && npm start --prefix backend
     healthCheckPath: /api/health
     envVars:
@@ -24,3 +25,18 @@ services:
         sync: false
       - key: JWT_SECRET
         generateValue: true
+      # Salasanan palautuksen sähköpostit (esim. Gmail: smtp.gmail.com, portti 465, sovellussalasana)
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: "465"
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      # Pelin julkinen osoite palautuslinkkeihin, esim. https://kpsl-peli.onrender.com
+      - key: APP_URL
+        sync: false
+      # Pelaajien palaute lähetetään tähän osoitteeseen (tallentuu myös tietokantaan)
+      - key: FEEDBACK_EMAIL
+        sync: false

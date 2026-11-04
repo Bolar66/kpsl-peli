@@ -33,3 +33,14 @@ export function validatePassword(value: unknown): string | null {
   if (Buffer.byteLength(value) > 72) return 'Salasana on liian pitkä (enintään 72 merkkiä)';
   return null;
 }
+
+// Sähköposti on valinnainen; tyhjä merkkijono tarkoittaa ettei sähköpostia ole
+export function validateEmail(value: unknown): { ok: true; email: string | null } | { ok: false; error: string } {
+  if (value === undefined || value === null || value === '') return { ok: true, email: null };
+  if (typeof value !== 'string') return { ok: false, error: 'Virheellinen sähköpostiosoite' };
+  const email = value.trim().toLowerCase();
+  if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return { ok: false, error: 'Virheellinen sähköpostiosoite' };
+  }
+  return { ok: true, email };
+}

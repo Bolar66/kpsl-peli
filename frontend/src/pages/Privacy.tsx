@@ -3,7 +3,7 @@ import './Lobby.css';
 import './Profile.css';
 
 // Ylläpitäjän yhteystieto tietosuojaselosteeseen (GDPR edellyttää rekisterinpitäjän yhteystiedot)
-const CONTACT = 'TÄYDENNÄ: ylläpitäjän nimi ja sähköpostiosoite';
+const CONTACT = 'Ville Kantonen, villekkantonen@gmail.com';
 
 export default function Privacy() {
   const navigate = useNavigate();
@@ -26,6 +26,7 @@ export default function Privacy() {
             <li><b>Nimimerkki</b> ja, jos olet luonut tunnuksen, <b>salasana</b> salattuna (bcrypt). Salasanaa ei voi lukea selväkielisenä.</li>
             <li><b>Profiilikuva</b>, jos lisäät sellaisen (emoji, väri tai oma kuva).</li>
             <li><b>Pelitiedot:</b> pelatut pelit, kierrosten valinnat ja niistä lasketut tilastot.</li>
+            <li><b>Palaute</b>, jos lähetät sellaisen: viesti, nimimerkkisi sekä selaimen ja laitteen tyyppi vikojen selvittämistä varten.</li>
           </ul>
           <p className="muted">Nimimerkkisi ja profiilikuvasi näkyvät muille pelaajille samassa huoneessa.</p>
         </section>
@@ -44,6 +45,13 @@ export default function Privacy() {
           <h2>Oikeutesi</h2>
           <p className="muted">Voit muokata nimimerkkiäsi ja profiilikuvaasi profiilissa. Voit poistaa tilisi ja kaikki siihen liittyvät tiedot pysyvästi kohdasta <b>Profiili → Poista tili</b>. Muissa tietosuoja-asioissa ota yhteyttä ylläpitäjään.</p>
           <p className="muted">Ylläpitäjä: {CONTACT}</p>
+        </section>
+        <section className="card">
+          <h2>Musiikki</h2>
+          <p className="muted">
+            “Lofi again” (omfgdude) ja “Kuia” (cinameng / James Gargette), molemmat CC0-lisenssillä,{' '}
+            <a href="https://opengameart.org" target="_blank" rel="noreferrer">OpenGameArt.org</a>. Kiitos tekijöille!
+          </p>
         </section>
       </main>
     </div>

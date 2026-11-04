@@ -1,4 +1,6 @@
+import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { setMusic } from './constants/music';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Register from './pages/Register';
 import Login from './pages/Login';
@@ -6,7 +8,9 @@ import Lobby from './pages/Lobby';
 import Room from './pages/Room';
 import Profile from './pages/Profile';
 import Privacy from './pages/Privacy';
+import ResetPassword from './pages/ResetPassword';
 import ErrorBoundary from './components/ErrorBoundary';
+import ServerWake from './components/ServerWake';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { token } = useAuth();
@@ -16,6 +20,12 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 function AppRoutes() {
+  const location = useLocation();
+  // Valikoissa soi rauhallinen musiikki; pelihuone vaihtaa itse pelimusiikkiin
+  useEffect(() => {
+    if (!location.pathname.startsWith('/room/')) setMusic('menu');
+  }, [location.pathname]);
+
   return (
     <Routes>
       <Route path="/register" element={<Register />} />
@@ -45,6 +55,7 @@ function AppRoutes() {
         }
       />
       <Route path="/tietosuoja" element={<Privacy />} />
+      <Route path="/palauta" element={<ResetPassword />} />
       <Route path="*" element={<Navigate to="/login" />} />
     </Routes>
   );
@@ -56,6 +67,7 @@ function App() {
       <AuthProvider>
         <BrowserRouter>
           <AppRoutes />
+          <ServerWake />
         </BrowserRouter>
       </AuthProvider>
     </ErrorBoundary>

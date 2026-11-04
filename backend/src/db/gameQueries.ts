@@ -80,20 +80,24 @@ export async function finalizeGame(
     );
   }
 
+  // Peli lasketaan bottipeliksi, jos siinä oli vain yksi oikea pelaaja (muut botteja)
+  const realPlayers = await pool.query('SELECT COUNT(*)::int AS n FROM game_players WHERE game_id = $1', [gameId]);
+  const vsBots = realPlayers.rows[0].n < 2;
+
   for (const userIdStr of Object.keys(symbolStats)) {
     const userId = parseInt(userIdStr);
     if (!isRealUser(userId)) continue;
     for (const symbol of Object.keys(symbolStats[userId]!)) {
       const s = symbolStats[userId]![symbol]!;
       await pool.query(
-        `INSERT INTO stats (user_id, mode, symbol, count, wins, losses, draws)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
-         ON CONFLICT (user_id, mode, symbol) DO UPDATE SET
+        `INSERT INTO stats (user_id, mode, symbol, count, wins, losses, draws, vs_bots)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         ON CONFLICT (user_id, mode, symbol, vs_bots) DO UPDATE SET
            count = stats.count + EXCLUDED.count,
            wins = stats.wins + EXCLUDED.wins,
            losses = stats.losses + EXCLUDED.losses,
            draws = stats.draws + EXCLUDED.draws`,
-        [userId, mode, symbol, s.count, s.wins, s.losses, s.draws]
+        [userId, mode, symbol, s.count, s.wins, s.losses, s.draws, vsBots]
       );
     }
   }

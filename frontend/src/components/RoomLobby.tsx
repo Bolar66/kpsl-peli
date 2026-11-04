@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { MODE_LABEL, type GameMode } from '../constants/symbols';
 import Avatar, { type AvatarData } from './Avatar';
 import Modal from './Modal';
+import ChatBubble, { type BubbleData } from './ChatBubble';
 
 export interface LobbySettings {
   mode: GameMode;
@@ -23,6 +24,8 @@ interface RoomLobbyProps {
   roomCode: string;
   players: LobbyPlayer[];
   myUserId: number | undefined;
+  matchWins: Record<number, number>;
+  bubbles: Record<number, BubbleData>;
   isHost: boolean;
   settings: LobbySettings;
   onChange: (settings: LobbySettings) => void;
@@ -68,7 +71,7 @@ function Segmented<T extends string>({ options, value, disabled, onChange }: {
 }
 
 export default function RoomLobby({
-  roomCode, players, myUserId, isHost, settings, onChange, onStart, onAddBot, onRemoveBot,
+  roomCode, players, matchWins, bubbles, myUserId, isHost, settings, onChange, onStart, onAddBot, onRemoveBot,
 }: RoomLobbyProps) {
   const [copied, setCopied] = useState(false);
   const [showTimes, setShowTimes] = useState(false);
@@ -120,7 +123,7 @@ export default function RoomLobby({
         </div>
         <ul className="player-slots">
           <AnimatePresence initial={false}>
-            {players.map(p => (
+            {players.map((p, index) => (
               <motion.li
                 key={p.userId}
                 layout
@@ -131,7 +134,12 @@ export default function RoomLobby({
               >
                 <span className="slot-avatar">
                   <Avatar player={p} size={46} />
-                  {p.isHost && <span className="slot-crown" aria-label="Host">👑</span>}
+                  {/* Reunimmaisten kupla ankkuroidaan reunasta, ettei se mene ruudun yli */}
+                  <ChatBubble bubble={bubbles[p.userId] ?? null} side={index === 0 ? 'up-start' : index === 3 ? 'up-end' : 'up'} />
+                  {p.isHost && <span className="slot-host">Host</span>}
+                  {(matchWins[p.userId] ?? 0) > 0 && (
+                    <span className="match-wins" title="Voitetut pelit tässä huoneessa">👑{matchWins[p.userId]}</span>
+                  )}
                   {p.isBot && isHost && (
                     <button className="remove-bot" onClick={() => onRemoveBot(p.userId)} aria-label={`Poista ${p.username}`}>×</button>
                   )}

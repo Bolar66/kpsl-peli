@@ -11,12 +11,16 @@ interface PauseMenuProps {
   pausedByName: string | null;
   mode: GameMode;
   onToggleReady: () => void;
+  onOpenAudio: () => void;
+  onOpenChat: () => void;
+  unread: number;
+  lastMessage: { name: string; text: string } | null;
   onExit: () => void;
 }
 
 // Tauko pysäyttää pelin kaikilta; peli jatkuu kun jokainen on kuitannut olevansa valmis
 export default function PauseMenu({
-  visible, iAmReady, readyCount, readyTotal, pausedByName, mode, onToggleReady, onExit,
+  visible, iAmReady, readyCount, readyTotal, pausedByName, mode, onToggleReady, onOpenAudio, onOpenChat, unread, lastMessage, onExit,
 }: PauseMenuProps) {
   const [view, setView] = useState<'menu' | 'rules' | 'confirm-exit'>('menu');
 
@@ -57,11 +61,21 @@ export default function PauseMenu({
             {readyCount}/{readyTotal} valmiina — peli jatkuu kun kaikki ovat valmiita.
             Kesken jäänyt kierros aloitetaan alusta.
           </p>
+          {/* Tauon aikana pöydän puhekuplat jäävät valikon alle, joten uusin viesti näytetään tässä */}
+          {lastMessage && (
+            <button className="pause-last-msg" onClick={onOpenChat}>
+              <b>{lastMessage.name}:</b> {lastMessage.text}
+            </button>
+          )}
           <div className="sheet-actions">
             <button className={`btn btn-block ${iAmReady ? 'btn-secondary' : 'btn-primary'}`} onClick={onToggleReady}>
               {iAmReady ? 'En olekaan valmis' : 'Jatketaan'}
             </button>
+            <button className="btn btn-secondary btn-block" onClick={onOpenChat}>
+              Chat ja emotet{unread > 0 && <span className="unread-inline">{unread > 9 ? '9+' : unread}</span>}
+            </button>
             <button className="btn btn-secondary btn-block" onClick={() => setView('rules')}>Säännöt</button>
+            <button className="btn btn-secondary btn-block" onClick={onOpenAudio}>Äänet ja musiikki</button>
             <button className="btn btn-ghost btn-block" onClick={() => setView('confirm-exit')}>Poistu pelistä</button>
           </div>
         </>

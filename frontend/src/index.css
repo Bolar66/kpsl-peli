@@ -179,6 +179,7 @@ button { font: inherit; color: inherit; }
 }
 .alert-danger { background: var(--danger-soft); color: var(--danger); }
 .alert-warn { background: var(--warn-soft); color: var(--warn); }
+.alert-success { background: var(--accent-soft); color: var(--accent); }
 
 .wordmark {
   font-family: var(--font-display);
@@ -246,3 +247,95 @@ button { font: inherit; color: inherit; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
+
+/* ---------- Äänet ---------- */
+.sound-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 52px;
+  padding: 0 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.switch { width: 44px; height: 26px; border-radius: 999px; background: var(--surface-3); position: relative; transition: background 0.2s ease; }
+.switch span { position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: var(--text-2); transition: transform 0.2s var(--ease), background 0.2s ease; }
+.sound-toggle.on .switch { background: var(--accent); }
+.sound-toggle.on .switch span { transform: translateX(18px); background: var(--accent-ink); }
+
+.volume-row { display: grid; grid-template-columns: 1fr auto; grid-template-areas: "label value" "slider slider"; gap: 8px 12px; align-items: center; }
+.volume-label { grid-area: label; font-size: 14px; font-weight: 500; }
+.volume-value { grid-area: value; font-family: var(--font-display); font-size: 14px; color: var(--text-2); min-width: 28px; text-align: right; }
+.volume-slider {
+  grid-area: slider;
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 28px;
+  background: transparent;
+  cursor: pointer;
+}
+.volume-slider::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 6px;
+  background: linear-gradient(to right, var(--accent) var(--fill), var(--surface-3) var(--fill));
+}
+.volume-slider::-moz-range-track { height: 6px; border-radius: 6px; background: var(--surface-3); }
+.volume-slider::-moz-range-progress { height: 6px; border-radius: 6px; background: var(--accent); }
+.volume-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 24px;
+  height: 24px;
+  margin-top: -9px;
+  border-radius: 50%;
+  background: var(--text);
+  border: 3px solid var(--bg);
+  box-shadow: 0 0 0 1px var(--border-strong);
+}
+.volume-slider::-moz-range-thumb { width: 20px; height: 20px; border-radius: 50%; background: var(--text); border: 3px solid var(--bg); }
+.volume-slider:disabled { opacity: 0.35; cursor: default; }
+
+/* ---------- Palaute ---------- */
+.feedback-link {
+  align-self: center;
+  border: none;
+  background: none;
+  color: var(--text-3);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 6px;
+}
+.feedback-link span { color: var(--accent); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+.feedback-form { display: flex; flex-direction: column; gap: 12px; }
+.feedback-form .sheet-title, .feedback-form .sheet-sub { margin: 0; }
+.feedback-text { min-height: 110px; resize: vertical; font: inherit; line-height: 1.4; padding-top: 10px; }
+.feedback-done { font-size: 48px; text-align: center; }
+
+/* ---------- Palvelimen herätys ---------- */
+.server-wake {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 24px;
+  text-align: center;
+  background: var(--bg);
+}
+.server-wake h2 { margin: 8px 0 0; font-family: var(--font-display); font-size: 22px; }
+.server-wake .muted { max-width: 300px; margin: 0; font-size: 14px; line-height: 1.5; }
+.wake-seconds { margin: 0; font-variant-numeric: tabular-nums; font-size: 13px; }
+.wake-hands { display: flex; gap: 10px; font-size: 34px; }
+.wake-hands span { animation: wake-bounce 1.2s ease-in-out infinite; }
+.wake-hands span:nth-child(2) { animation-delay: 0.15s; }
+.wake-hands span:nth-child(3) { animation-delay: 0.3s; }
+@keyframes wake-bounce { 0%, 60%, 100% { transform: translateY(0); } 30% { transform: translateY(-10px); } }
+@media (prefers-reduced-motion: reduce) { .wake-hands span { animation: none; } }

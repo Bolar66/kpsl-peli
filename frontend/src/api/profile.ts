@@ -8,6 +8,7 @@ export interface Profile {
   avatarEmoji: string | null;
   avatarColor: string | null;
   avatarImage: string | null;
+  email: string | null;
   createdAt: string;
 }
 
@@ -21,6 +22,7 @@ export interface SymbolStat {
 
 export interface RecentGame {
   id: number;
+  vsBots: boolean;
   playedAt: string;
   mode: 'classic' | 'extended';
   winsRequired: number;
@@ -29,16 +31,27 @@ export interface RecentGame {
   winner: string | null;
 }
 
-export interface ModeStats {
+export interface GameStatRow {
+  mode: 'classic' | 'extended';
+  vsBots: boolean;
   games: number;
   wins: number;
   roundWins: number;
-  symbols: SymbolStat[];
 }
 
+export interface OpponentRow {
+  mode: 'classic' | 'extended';
+  username: string;
+  games: number;
+  wins: number;
+}
+
+// Rivit pelimuodoittain ja vastustajatyypeittäin; profiilisivu suodattaa ja laskee yhteen
 export interface ProfileStats {
-  byMode: { classic: ModeStats; extended: ModeStats };
+  games: GameStatRow[];
+  symbols: (SymbolStat & { mode: 'classic' | 'extended'; vsBots: boolean })[];
   recent: RecentGame[];
+  opponents: OpponentRow[];
 }
 
 async function request<T>(token: string, path: string, method = 'GET', body?: unknown): Promise<T> {
@@ -58,7 +71,7 @@ export function getMyProfile(token: string) {
   return request<{ profile: Profile; stats: ProfileStats }>(token, '/me');
 }
 
-export function updateMyProfile(token: string, changes: Partial<Pick<Profile, 'username' | 'avatarEmoji' | 'avatarColor' | 'avatarImage'>>) {
+export function updateMyProfile(token: string, changes: Partial<Pick<Profile, 'username' | 'avatarEmoji' | 'avatarColor' | 'avatarImage' | 'email'>>) {
   return request<{ profile: Profile; token: string }>(token, '/me', 'PATCH', changes);
 }
 

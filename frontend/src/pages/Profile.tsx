@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { AuthError } from '../api/games';
-import { deleteMyAccount, getMyProfile, setPassword, updateMyProfile, type ModeStats, type Profile as ProfileData, type ProfileStats } from '../api/profile';
+import { deleteMyAccount, getMyProfile, setPassword, updateMyProfile, type Profile as ProfileData, type ProfileStats } from '../api/profile';
 import Avatar from '../components/Avatar';
 import ProfileEditor from '../components/ProfileEditor';
 import Modal from '../components/Modal';
@@ -16,17 +16,26 @@ function percent(part: number, total: number) {
 }
 
 type StatsView = 'all' | 'classic' | 'extended';
+type OpponentView = 'all' | 'players' | 'bots';
 
-// Yhdistää molempien pelimuotojen tilastot "Kaikki"-näkymää varten
-function combine(a: ModeStats, b: ModeStats): ModeStats {
-  const symbols = new Map<string, ModeStats['symbols'][number]>();
-  for (const s of [...a.symbols, ...b.symbols]) {
-    const prev = symbols.get(s.symbol);
-    symbols.set(s.symbol, prev
-      ? { symbol: s.symbol, count: prev.count + s.count, wins: prev.wins + s.wins, losses: prev.losses + s.losses, draws: prev.draws + s.draws }
-      : { ...s });
+// Suodattaa tilastot valitun pelimuodon ja vastustajatyypin mukaan ja laskee ne yhteen
+function summarize(stats: ProfileStats, view: StatsView, opponents: OpponentView) {
+  const matches = (row: { mode: string; vsBots: boolean }) =>
+    (view === 'all' || row.mode === view) &&
+    (opponents === 'all' || (opponents === 'bots') === row.vsBots);
+
+  const games = stats.games.filter(matches);
+  const symbols = new Map<string, { count: number; wins: number }>();
+  for (const s of stats.symbols.filter(matches)) {
+    const prev = symbols.get(s.symbol) ?? { count: 0, wins: 0 };
+    symbols.set(s.symbol, { count: prev.count + s.count, wins: prev.wins + s.wins });
   }
-  return { games: a.games + b.games, wins: a.wins + b.wins, roundWins: a.roundWins + b.roundWins, symbols: [...symbols.values()] };
+  return {
+    games: games.reduce((n, g) => n + g.games, 0),
+    wins: games.reduce((n, g) => n + g.wins, 0),
+    roundWins: games.reduce((n, g) => n + g.roundWins, 0),
+    symbols,
+  };
 }
 
 export default function Profile() {
@@ -39,6 +48,7 @@ export default function Profile() {
   const [passwordOpen, setPasswordOpen] = useState(false);
   const [confirmLogout, setConfirmLogout] = useState(false);
   const [view, setView] = useState<StatsView>('all');
+  const [opponentView, setOpponentView] = useState<OpponentView>('all');
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -79,18 +89,29 @@ export default function Profile() {
     });
   }
 
-  const shown: ModeStats | null = stats
-    ? view === 'all' ? combine(stats.byMode.classic, stats.byMode.extended) : stats.byMode[view]
-    : null;
+  const shown = stats ? summarize(stats, view, opponentView) : null;
   // Lisko ja Spock näytetään kun katsotaan Lisko–Spock-pelejä, tai kun niitä on pelattu
-  const playedExtended = !!stats && (stats.byMode.extended.games > 0 || stats.byMode.extended.symbols.length > 0);
+  const playedExtended = !!stats && stats.games.some(g => g.mode === 'extended');
   const symbolOrder = view === 'classic' || (view === 'all' && !playedExtended) ? SYMBOLS_BY_MODE.classic : SYMBOLS_BY_MODE.extended;
   const symbolRows = shown
-    ? symbolOrder.map(symbol => {
-        const s = shown.symbols.find(x => x.symbol === symbol);
-        return { symbol, count: s?.count ?? 0, wins: s?.wins ?? 0 };
-      })
+    ? symbolOrder.map(symbol => ({ symbol, count: shown.symbols.get(symbol)?.count ?? 0, wins: shown.symbols.get(symbol)?.wins ?? 0 }))
     : [];
+  // Kolme vastustajaa, joita vastaan on eniten pelivoittoja (vain oikeat pelaajat)
+  const topOpponents = stats
+    ? [...stats.opponents
+        .filter(o => view === 'all' || o.mode === view)
+        .reduce((map, o) => {
+          const prev = map.get(o.username) ?? { username: o.username, games: 0, wins: 0 };
+          map.set(o.username, { username: o.username, games: prev.games + o.games, wins: prev.wins + o.wins });
+          return map;
+        }, new Map<string, { username: string; games: number; wins: number }>())
+        .values()]
+        .sort((a, b) => b.wins - a.wins || b.games - a.games)
+        .slice(0, 3)
+    : [];
+  const countFor = (mode: StatsView) => stats?.games.filter(g => mode === 'all' || g.mode === mode).reduce((n, g) => n + g.games, 0) ?? 0;
+  const recentShown = stats?.recent.filter(g =>
+    (view === 'all' || g.mode === view) && (opponentView === 'all' || (opponentView === 'bots') === g.vsBots)) ?? [];
   const totalPicks = symbolRows.reduce((sum, r) => sum + r.count, 0);
   const totalRoundWins = symbolRows.reduce((sum, r) => sum + r.wins, 0);
   const favorite = totalPicks > 0 ? [...symbolRows].sort((a, b) => b.count - a.count)[0] : null;
@@ -144,7 +165,21 @@ export default function Profile() {
                   onClick={() => setView(value)}
                 >
                   {label}
-                  {value !== 'all' && <span className="seg-count"> {stats.byMode[value].games}</span>}
+                  {value !== 'all' && <span className="seg-count"> {countFor(value)}</span>}
+                </button>
+              ))}
+            </div>
+
+            <div className="seg" role="tablist" aria-label="Vastustajat">
+              {([['all', 'Kaikki'], ['players', 'Kavereita vastaan'], ['bots', 'Botteja vastaan']] as [OpponentView, string][]).map(([value, label]) => (
+                <button
+                  key={value}
+                  role="tab"
+                  aria-selected={opponentView === value}
+                  className={opponentView === value ? 'active' : ''}
+                  onClick={() => setOpponentView(value)}
+                >
+                  {label}
                 </button>
               ))}
             </div>
@@ -196,15 +231,39 @@ export default function Profile() {
               )}
             </section>
 
-            {stats.recent.some(g => view === 'all' || g.mode === view) && (
+            {opponentView !== 'bots' && (
+              <section className="card">
+                <div className="section-head">
+                  <h2>Eniten voittoja vastaan</h2>
+                  <span className="faint">kaverit</span>
+                </div>
+                {topOpponents.length === 0 ? (
+                  <p className="muted empty-stats">Pelaa kavereita vastaan, niin näet täällä ketä vastaan voitat useimmin.</p>
+                ) : (
+                  <ol className="opponents">
+                    {topOpponents.map((o, i) => (
+                      <li key={o.username}>
+                        <span className="opponent-rank">{['🥇', '🥈', '🥉'][i]}</span>
+                        <span className="opponent-name">{o.username}</span>
+                        <span className="opponent-score">
+                          <b>{o.wins}</b> voittoa <span className="faint">/ {o.games} peliä</span>
+                        </span>
+                      </li>
+                    ))}
+                  </ol>
+                )}
+              </section>
+            )}
+
+            {recentShown.length > 0 && (
               <section className="card">
                 <div className="section-head"><h2>Viimeisimmät pelit</h2></div>
                 <ul className="recent-list">
-                  {stats.recent.filter(g => view === 'all' || g.mode === view).map(g => (
+                  {recentShown.map(g => (
                     <li key={g.id}>
                       <span className={`result-pill ${g.won ? 'won' : ''}`}>{g.won ? 'Voitto' : 'Häviö'}</span>
                       <span className="recent-main">
-                        {MODE_LABEL[g.mode] ?? g.mode}
+                        {MODE_LABEL[g.mode] ?? g.mode}{g.vsBots ? ' · botit' : ''}
                         <span className="faint"> · {g.myWins}/{g.winsRequired}{!g.won && g.winner ? ` · voittaja ${g.winner}` : ''}</span>
                       </span>
                       <span className="faint recent-date">{new Date(g.playedAt).toLocaleDateString('fi-FI', { day: 'numeric', month: 'numeric' })}</span>

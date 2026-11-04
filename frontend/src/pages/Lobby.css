@@ -95,3 +95,41 @@
   .lobby-card-text { display: none; }
   .how-to { display: none; }
 }
+
+.topbar-actions { display: flex; align-items: center; gap: 8px; }
+
+/* Kotinäytölle lisäämisen vihje */
+.install-hint {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 36px 12px 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--accent);
+  background: var(--surface);
+  overflow: hidden;
+}
+.install-icon { width: 40px; height: 40px; border-radius: 10px; flex-shrink: 0; }
+.install-text { display: flex; flex-direction: column; gap: 2px; font-size: 13px; color: var(--text-2); line-height: 1.35; min-width: 0; }
+.install-text b { color: var(--text); font-size: 14px; }
+.share-glyph { vertical-align: -2px; color: var(--accent); }
+.install-btn { flex-shrink: 0; min-height: 36px; padding: 0 14px; }
+.install-close {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: none;
+  color: var(--text-3);
+  cursor: pointer;
+  font-size: 13px;
+}
+/* Vihjeen ollessa näkyvissä etusivun alaotsikko väistyy, jotta kaikki mahtuu ilman vieritystä */
+.lobby-main:has(.install-hint) .lobby-hero .muted { display: none; }
+@media (max-height: 760px) {
+  .install-hint { padding: 10px 34px 10px 10px; }
+  .install-icon { width: 34px; height: 34px; }
+}

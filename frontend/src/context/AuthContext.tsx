@@ -72,6 +72,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components -- hook kuuluu samaan tiedostoon kuin Provider
 export function useAuth() {
   const context = useContext(AuthContext);
   if (!context) throw new Error('useAuth pitää käyttää AuthProviderin sisällä');

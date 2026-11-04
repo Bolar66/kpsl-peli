@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -12,7 +12,15 @@ import RoundWinnerBanner from '../components/RoundWinnerBanner';
 import RoomLobby, { type LobbySettings } from '../components/RoomLobby';
 import { explainWin, MODE_LABEL, type GameMode } from '../constants/symbols';
 import { haptic } from '../constants/players';
-import { isMuted, setMuted, sfx } from '../constants/sound';
+import { crowdFx, sfx } from '../constants/sound';
+import { setMusic, setMusicHazy } from '../constants/music';
+import SmokeEffect, { SMOKE_DURATION_MS } from '../components/SmokeEffect';
+import { duckMusic, setMusicMuffled } from '../constants/audioEngine';
+import AudioSettingsSheet from '../components/AudioSettings';
+import ChatSheet from '../components/ChatSheet';
+import { BUBBLE_MS, EMOTE_BUBBLE_MS, isBigEmoji, type ChatMessage } from '../constants/chat';
+import type { BubbleData } from '../components/ChatBubble';
+import { useAudioSettings } from '../hooks/useAudioSettings';
 import './Room.css';
 
 interface Player {
@@ -65,7 +73,9 @@ export default function Room() {
   const [mode, setMode] = useState<GameMode>('classic');
   const [winsRequired, setWinsRequired] = useState(3);
   const [roundNumber, setRoundNumber] = useState<number | null>(null);
-  const [duration, setDuration] = useState(10);
+  // Ajastin: kierroksen loppuhetki ja alkuperäinen pituus; sekuntilukema lasketaan näistä
+  const [endsAt, setEndsAt] = useState<number | null>(null);
+  const [totalMs, setTotalMs] = useState(10000);
   const [countdown, setCountdown] = useState<number | null>(null);
   const [hasPicked, setHasPicked] = useState(false);
   const [pickedSymbol, setPickedSymbol] = useState<string | null>(null);
@@ -86,15 +96,34 @@ export default function Room() {
   const [retryMessage, setRetryMessage] = useState('');
 
   const [readyCheckActive, setReadyCheckActive] = useState(false);
+  // Peli on käynnissä pelin aloituksesta sen loppuun asti — myös valmiustarkistuksen ja
+  // ensimmäisen kierroksen välisen hetken, jottei odotushuone ja valikkomusiikki välähdä välissä
+  const [gameActive, setGameActive] = useState(false);
   const [readyReason, setReadyReason] = useState<ReadyReason | null>(null);
   const [pausedByName, setPausedByName] = useState<string | null>(null);
   const [readyNames, setReadyNames] = useState<string[]>([]);
   const [readyTotal, setReadyTotal] = useState(0);
 
   const [showWinnerBanner, setShowWinnerBanner] = useState(false);
-  const [muted, setMutedState] = useState(isMuted());
+  const audioSettings = useAudioSettings();
+  const [audioOpen, setAudioOpen] = useState(false);
+  // Chat: viestihistoria, profiilikuvien vieressä näkyvät kuplat ja lukemattomat viestit
+  const [chat, setChat] = useState<ChatMessage[]>([]);
+  const [bubbles, setBubbles] = useState<Record<number, BubbleData>>({});
+  const [chatOpen, setChatOpen] = useState(false);
+  const [unread, setUnread] = useState(0);
+  // Luetaan socket-käsittelijässä, joten pidetään ajan tasalla refissä
+  const chatOpenRef = useRef(false);
+  useEffect(() => { chatOpenRef.current = chatOpen; }, [chatOpen]);
   // Voittoputket: montako kierrosta peräkkäin kukin on voittanut
   const [streaks, setStreaks] = useState<Record<string, number>>({});
+  // Oma voittoputki katsomon reaktioita varten (ref, koska sitä luetaan tapahtumankäsittelijässä)
+  const myStreak = useRef(0);
+  // Kokonaisten pelien voitot tässä huoneessa (uusinnat yhteen laskettuna), avaimena pelaajan id
+  const [matchWins, setMatchWins] = useState<Record<number, number>>({});
+  // Piilotettu yllätys: onko efekti käynnissä ja ketkä ovat sen laukaisseet tässä huoneessa (🍃)
+  const [smokeActive, setSmokeActive] = useState(false);
+  const [leafWinners, setLeafWinners] = useState<Set<number>>(new Set());
 
   const myName = user?.username || '';
   const me = players.find(p => p.userId === user?.id);
@@ -116,6 +145,7 @@ export default function Room() {
       roundNumber: number | null;
       roundActive: boolean;
       duration: number | null;
+      remainingMs: number | null;
       remainingSeconds: number | null;
       myPick: string | null;
       pickCount: { picked: number; total: number; pickedNames: string[] } | null;
@@ -126,12 +156,17 @@ export default function Room() {
       ready: { reason: ReadyReason; readyNames: string[]; total: number; pausedByName: string | null } | null;
       gameOverWinner: string | null;
       settings: LobbySettings | null;
+      matchWins: { userId: number; wins: number }[];
+      chat: ChatMessage[];
     }) => {
+      setChat(state.chat ?? []);
+      setMatchWins(Object.fromEntries((state.matchWins ?? []).map(m => [m.userId, m.wins])));
       setMode(state.mode);
       setWinsRequired(state.winsRequired);
       if (state.settings) setSettings(state.settings);
       setRoundNumber(state.roundNumber);
-      if (state.duration !== null) setDuration(state.duration);
+      if (state.duration !== null) setTotalMs(state.duration * 1000);
+      setEndsAt(state.remainingMs !== null ? Date.now() + state.remainingMs : null);
       setCountdown(state.remainingSeconds);
       setHasPicked(state.myPick !== null);
       setPickedSymbol(state.myPick);
@@ -148,6 +183,7 @@ export default function Room() {
       setReadyTotal(state.ready?.total ?? 0);
       setPausedByName(state.ready?.pausedByName ?? null);
       setGameOverWinner(state.gameOverWinner);
+      setGameActive(state.roundNumber !== null || state.ready !== null || !!state.gameOverWinner);
       setGameOverReason(null);
       setJoinRejected(null);
       setRetryMessage('');
@@ -161,6 +197,7 @@ export default function Room() {
     socket.on('round:start', ({ roundNumber, duration: roundDuration, mode, dnf, hearts }: {
       roundNumber: number; duration: number; mode: GameMode; dnf: string[]; hearts: HeartsEntry[];
     }) => {
+      setGameActive(true);
       setRoundNumber(roundNumber);
       setMode(mode);
       setHasPicked(false);
@@ -168,7 +205,8 @@ export default function Room() {
       setPickCount(null);
       setRevealResults(null);
       setGameOverWinner(null);
-      setDuration(roundDuration);
+      setTotalMs(roundDuration * 1000);
+      setEndsAt(Date.now() + roundDuration * 1000);
       setCountdown(roundDuration);
       setDnfPlayers(dnf || []);
       setHearts(hearts || []);
@@ -195,8 +233,9 @@ export default function Room() {
       setRetryMessage('');
     });
 
+    // Kaikki valitsivat: aika lyhenee, mutta renkaan mittakaava pysyy samana (rengas liukuu uuteen kohtaan)
     socket.on('round:speedup', ({ remainingSeconds, newDuration }: { remainingSeconds: number; newDuration: number }) => {
-      setDuration(newDuration);
+      setEndsAt(Date.now() + newDuration * 1000);
       setCountdown(remainingSeconds);
     });
 
@@ -204,6 +243,7 @@ export default function Room() {
       roundNumber: number; results: RevealResult[]; winners: string[]; isDraw: boolean; wins: WinsEntry[]; hearts: HeartsEntry[];
     }) => {
       setCountdown(null);
+      setEndsAt(null);
       setRevealResults(data.results);
       setWinners(data.winners);
       setIsDraw(data.isDraw);
@@ -214,8 +254,16 @@ export default function Room() {
       const iWon = data.winners.includes(user?.username ?? '') && !data.isDraw;
       haptic(iWon ? [20, 40, 70] : 35);
       sfx.flip();
+      // Musiikki väistää paljastuksen ja katsomon ajaksi
+      duckMusic(0.4, 2.4);
       // Tulosääni kun kortit ovat kääntyneet
-      setTimeout(() => (data.isDraw ? sfx.draw() : iWon ? sfx.win() : sfx.lose()), 550);
+      if (!data.isDraw) myStreak.current = iWon ? myStreak.current + 1 : 0;
+      const streakNow = myStreak.current;
+      setTimeout(() => {
+        if (data.isDraw) sfx.draw();
+        else if (iWon) { sfx.win(); crowdFx.roundWin(streakNow); }
+        else { sfx.lose(); crowdFx.otherWin(); }
+      }, 550);
       if (!data.isDraw) {
         setStreaks(prev => {
           const next: Record<string, number> = {};
@@ -225,6 +273,40 @@ export default function Room() {
       }
     });
 
+    socket.on('easter:light', ({ userId }: { userId: number; username: string }) => {
+      setSmokeActive(true);
+      setLeafWinners(prev => new Set(prev).add(userId));
+      sfx.lighter();
+      setTimeout(() => sfx.exhale(), 1100);
+      setMusicHazy(true);
+      haptic([30, 60, 30]);
+      setTimeout(() => {
+        setSmokeActive(false);
+        setMusicHazy(false);
+      }, SMOKE_DURATION_MS);
+    });
+
+    socket.on('chat:message', (m: ChatMessage) => {
+      setChat(prev => [...prev.slice(-29), m]);
+      setBubbles(prev => ({ ...prev, [m.userId]: { id: m.id, text: m.text, emote: isBigEmoji(m) } }));
+      // Kupla häviää hetken päästä, ellei samalta pelaajalta tullut sillä välin uutta viestiä
+      setTimeout(() => setBubbles(prev => {
+        if (prev[m.userId]?.id !== m.id) return prev;
+        const next = { ...prev };
+        delete next[m.userId];
+        return next;
+      }), isBigEmoji(m) ? EMOTE_BUBBLE_MS : BUBBLE_MS);
+      if (m.userId !== user?.id) {
+        sfx.chat();
+        if (!chatOpenRef.current && !m.emote) setUnread(n => n + 1);
+      }
+    });
+
+    socket.on('chat:slowdown', () => {
+      setError('Hidasta vähän — liian monta viestiä lyhyessä ajassa');
+      setTimeout(() => setError(''), 2500);
+    });
+
     socket.on('room:joinRejected', ({ message }: { message: string }) => setJoinRejected(message));
 
     socket.on('connect_error', (err: Error) => {
@@ -232,7 +314,10 @@ export default function Room() {
       if (err.message === 'Virheellinen token' || err.message === 'Token puuttuu') logout();
     });
 
-    socket.on('game:over', ({ winner, reason, finalWins }: { winner: string; reason?: 'forfeit'; finalWins: WinsEntry[] }) => {
+    socket.on('game:over', ({ winner, reason, finalWins, matchWins: mw }: {
+      winner: string; reason?: 'forfeit'; finalWins: WinsEntry[]; matchWins: { userId: number; wins: number }[];
+    }) => {
+      setMatchWins(Object.fromEntries((mw ?? []).map(m => [m.userId, m.wins])));
       setGameOverWinner(winner);
       setFinalWins(finalWins);
       setGameOverReason(reason ?? null);
@@ -241,6 +326,11 @@ export default function Room() {
       if (winner === user?.username) {
         haptic([60, 50, 60, 50, 140]);
         sfx.gameWin();
+        duckMusic(0.2, 5.5);
+        setTimeout(() => crowdFx.gameWin(), 900);
+      } else {
+        duckMusic(0.35, 3.5);
+        setTimeout(() => crowdFx.gameLose(), 900);
       }
     });
 
@@ -248,6 +338,7 @@ export default function Room() {
       setMode(mode);
       setWinsRequired(winsRequired);
       setRoundNumber(null);
+      setGameActive(false);
       setGameOverWinner(null);
       setRevealResults(null);
       setWins([]);
@@ -266,7 +357,9 @@ export default function Room() {
       reason: ReadyReason; readyNames: string[]; total: number; mode: GameMode; winsRequired: number;
     }) => {
       setReadyCheckActive(true);
+      setGameActive(true);
       setReadyReason(reason);
+      setEndsAt(null);
       setReadyNames(readyNames);
       setReadyTotal(total);
       if (readyMode) setMode(readyMode);
@@ -274,6 +367,7 @@ export default function Room() {
       setGameOverWinner(null);
       if (reason === 'game-start') {
         setStreaks({});
+        myStreak.current = 0;
         setRoundNumber(null);
         setWins([]);
         setHearts([]);
@@ -306,17 +400,30 @@ export default function Room() {
       [
         'room:state', 'room:players', 'settings:update', 'round:start', 'round:retry', 'pick:count', 'round:speedup',
         'round:reveal', 'room:joinRejected', 'connect_error', 'game:over', 'game:reset', 'game:pause', 'ready:check',
-        'ready:status', 'ready:allReady', 'game:pausedBy', 'round:missed', 'error:message',
+        'ready:status', 'ready:allReady', 'game:pausedBy', 'round:missed', 'error:message', 'easter:light', 'chat:message', 'chat:slowdown',
       ].forEach(ev => socket.off(ev));
     };
-  }, [socket, roomCode, logout, user?.username]);
+  }, [socket, roomCode, logout, user?.username, user?.id]);
 
+  // Sekuntilukema lasketaan loppuhetkestä, joten se ei ajelehdi palvelimen ajastimesta
   useEffect(() => {
-    if (paused) return;
-    if (countdown === null || countdown <= 0) return;
-    const timer = setTimeout(() => setCountdown(countdown - 1), 1000);
-    return () => clearTimeout(timer);
-  }, [countdown, paused]);
+    if (paused || endsAt === null) return;
+    const id = setInterval(() => setCountdown(Math.max(0, Math.ceil((endsAt - Date.now()) / 1000))), 100);
+    return () => clearInterval(id);
+  }, [endsAt, paused]);
+
+  // Pelin aikana soi intensiivisempi kappale, odotushuoneessa ja pelin lopussa valikkomusiikki
+  const musicInGame = gameActive && !gameOverWinner;
+  useEffect(() => {
+    setMusic(musicInGame ? 'game' : 'menu');
+  }, [musicInGame]);
+
+  // Tauolla musiikki vaimenee
+  const musicMuffled = paused || (readyCheckActive && readyReason === 'manual-pause');
+  useEffect(() => {
+    setMusicMuffled(musicMuffled);
+    return () => setMusicMuffled(false);
+  }, [musicMuffled]);
 
   // Tikitys viimeisillä sekunneilla
   useEffect(() => {
@@ -324,9 +431,10 @@ export default function Room() {
     sfx.tick(countdown === 1);
   }, [countdown, paused, revealResults]);
 
-  function toggleMute() {
-    setMuted(!muted);
-    setMutedState(!muted);
+
+
+  function sendChat(message: { text?: string; emote?: string }) {
+    socket?.emit('chat:send', { roomCode, ...message });
   }
 
   function handleSettingsChange(next: LobbySettings) {
@@ -381,7 +489,7 @@ export default function Room() {
     );
   }
 
-  const inGame = roundNumber !== null || !!gameOverWinner || readyCheckActive;
+  const inGame = gameActive || roundNumber !== null || !!gameOverWinner || readyCheckActive;
   const winnerSet = revealResults && !isDraw ? new Set(winners) : new Set<string>();
 
   const circlePlayers = players.map(p => ({
@@ -399,6 +507,9 @@ export default function Room() {
     isDnf: dnfPlayers.includes(p.username),
     isWinner: winnerSet.has(p.username),
     streak: streaks[p.username] ?? 0,
+    matchWins: matchWins[p.userId] ?? 0,
+    leaf: leafWinners.has(p.userId),
+    bubble: bubbles[p.userId] ?? null,
     revealedSymbol: revealResults?.find(r => r.username === p.username)?.symbol ?? null,
   }));
 
@@ -454,12 +565,21 @@ export default function Room() {
         </div>
         <div className="room-topbar-right">
           <button
-            className="icon-btn"
-            onClick={toggleMute}
-            aria-label={muted ? 'Äänet päälle' : 'Mykistä äänet'}
-            title={muted ? 'Äänet päälle' : 'Mykistä äänet'}
+            className="icon-btn chat-btn"
+            onClick={() => { setChatOpen(true); setUnread(0); }}
+            aria-label={unread ? `Chat ja emotet, ${unread} uutta viestiä` : 'Chat ja emotet'}
+            title="Chat ja emotet"
           >
-            {muted ? '🔇' : '🔊'}
+            😀
+            {unread > 0 && <span className="unread">{unread > 9 ? '9+' : unread}</span>}
+          </button>
+          <button
+            className="icon-btn"
+            onClick={() => setAudioOpen(true)}
+            aria-label="Äänet"
+            title="Äänet"
+          >
+            {audioSettings.muted ? '🔇' : '🔊'}
           </button>
         </div>
       </header>
@@ -471,6 +591,8 @@ export default function Room() {
         <RoomLobby
           roomCode={roomCode}
           players={players}
+          matchWins={matchWins}
+          bubbles={bubbles}
           myUserId={user?.id}
           isHost={isHost}
           settings={settings}
@@ -487,7 +609,8 @@ export default function Room() {
             players={circlePlayers}
             winsRequired={winsRequired}
             countdown={countdown}
-            duration={duration}
+            endsAt={paused ? null : endsAt}
+            totalMs={totalMs}
             paused={paused}
             isRevealPhase={revealResults !== null}
             isDraw={isDraw}
@@ -525,13 +648,18 @@ export default function Room() {
       />
 
       <PauseMenu
-        visible={isManualPauseGap}
+        // Äänisäätöjen ollessa auki taukovalikko piilotetaan, jotta säätimet ovat päällimmäisenä
+        visible={isManualPauseGap && !audioOpen && !chatOpen}
         iAmReady={iAmReady}
         readyCount={readyNames.length}
         readyTotal={readyTotal}
         pausedByName={pausedByName}
         mode={mode}
         onToggleReady={handlePauseReadyToggle}
+        onOpenAudio={() => setAudioOpen(true)}
+        onOpenChat={() => { setChatOpen(true); setUnread(0); }}
+        unread={unread}
+        lastMessage={chat.length ? { name: chat[chat.length - 1]!.userId === user?.id ? 'Sinä' : chat[chat.length - 1]!.username, text: chat[chat.length - 1]!.text } : null}
         onExit={handleExit}
       />
 
@@ -546,11 +674,23 @@ export default function Room() {
           wins: w.wins,
         }))}
         myUsername={myName}
+        matchWins={matchWins}
         hostName={hostName}
         isHost={isHost}
         onReplay={handleReplay}
         onBackToLobby={handleBackToLobby}
         onExit={handleExit}
+        onSecret={() => socket?.emit('easter:light', { roomCode })}
+        secretActive={smokeActive}
+      />
+      {smokeActive && <SmokeEffect />}
+      <AudioSettingsSheet open={audioOpen} onClose={() => setAudioOpen(false)} />
+      <ChatSheet
+        open={chatOpen}
+        messages={chat}
+        myUserId={user?.id}
+        onSend={sendChat}
+        onClose={() => { setChatOpen(false); setUnread(0); }}
       />
     </div>
   );

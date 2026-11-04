@@ -781,3 +781,243 @@
 /* Sivupaikat ovat lähellä kentän reunaa: kapeampi nimilappu, ettei se mene reunan yli */
 .seat.side .seat-name { max-width: 60px; }
 .seat.side .seat-tag { padding: 3px 7px 4px; }
+
+/* ---------- Kierrosvoitot ja kierroksen voittajan korostus ---------- */
+.seat-meta { gap: 6px; }
+.seat-wins {
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--text-2);
+}
+.seat-wins small { font-size: 9px; color: var(--text-3); font-weight: 600; }
+.seat-wins.has { color: var(--accent); }
+
+.spotlight {
+  position: absolute;
+  width: 230px;
+  height: 230px;
+  margin: -115px 0 0 -115px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(212, 255, 58, 0.28) 0%, rgba(212, 255, 58, 0.08) 40%, transparent 70%);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.seat { transition: opacity 0.4s ease, filter 0.4s ease; }
+.seat.loser { opacity: 0.45; filter: grayscale(0.7); }
+.seat.winner .seat-avatar { animation: winner-bounce 0.7s cubic-bezier(0.3, 1.6, 0.5, 1) 0.5s both; }
+.seat.winner .seat-avatar .avatar-img { box-shadow: 0 0 0 3px var(--accent), 0 0 26px rgba(212, 255, 58, 0.7); animation: winner-glow 1.2s ease-in-out 1.1s infinite alternate; }
+.seat.winner .seat-tag { border-color: var(--accent); background: rgba(24, 30, 6, 0.95); }
+.seat.winner .seat-name { color: var(--accent); }
+@keyframes winner-bounce {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.22); }
+  100% { transform: scale(1.08); }
+}
+@keyframes winner-glow {
+  to { box-shadow: 0 0 0 3px var(--accent), 0 0 40px rgba(212, 255, 58, 0.95); }
+}
+
+/* Voitetut kokonaiset pelit tässä huoneessa */
+.match-wins {
+  position: absolute;
+  top: -6px;
+  right: -10px;
+  padding: 2px 5px;
+  border-radius: 999px;
+  background: rgba(11, 11, 12, 0.92);
+  border: 1px solid rgba(253, 230, 138, 0.6);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+  color: #FDE68A;
+  white-space: nowrap;
+  z-index: 2;
+}
+.slot-host {
+  position: absolute;
+  bottom: -7px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.standing-match { font-size: 13px; color: #FDE68A; font-weight: 700; margin-right: 6px; }
+
+/* ---------- Piilotettu yllätys ---------- */
+.trophy { cursor: default; user-select: none; -webkit-user-select: none; }
+.trophy.won { cursor: pointer; }
+.trophy.lit { filter: none; animation: flame 0.35s ease-in-out infinite alternate; }
+@keyframes flame { to { transform: scale(1.08) rotate(-3deg); } }
+
+.smoke-layer { position: fixed; inset: 0; pointer-events: none; z-index: 1003; overflow: hidden; }
+.smoke-haze {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 50% 70%, rgba(150, 200, 110, 0.22), rgba(90, 120, 70, 0.14) 60%, rgba(40, 50, 35, 0.2));
+  backdrop-filter: blur(1.5px) saturate(1.3);
+  -webkit-backdrop-filter: blur(1.5px) saturate(1.3);
+}
+.smoke-puff {
+  position: absolute;
+  top: 0;
+  margin-left: -60px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(225, 230, 220, 0.55) 0%, rgba(200, 205, 195, 0.25) 45%, transparent 70%);
+  filter: blur(8px);
+}
+.smoke-leaf { position: absolute; top: 0; }
+
+/* ---------- Chat ja emotet ---------- */
+.chat-bubble {
+  position: absolute;
+  z-index: 20;
+  max-width: 150px;
+  width: max-content;
+  padding: 6px 10px;
+  border-radius: 14px;
+  background: var(--text);
+  color: var(--accent-ink);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.25;
+  text-align: left;
+  overflow-wrap: anywhere;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+}
+.chat-bubble.emote {
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
+  font-size: 48px;
+  line-height: 1;
+  filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.55));
+}
+.chat-bubble-text { position: relative; }
+/* Emoten takaa laajeneva valorengas ja ylös leijuvat pienet kopiot */
+.emote-ring {
+  position: absolute;
+  inset: 50% auto auto 50%;
+  width: 56px;
+  height: 56px;
+  margin: -28px 0 0 -28px;
+  border-radius: 50%;
+  border: 2px solid var(--accent);
+  opacity: 0;
+  animation: emote-ring 0.7s 0.1s ease-out;
+}
+@keyframes emote-ring { 0% { opacity: 0.9; transform: scale(0.3); } 100% { opacity: 0; transform: scale(1.5); } }
+.emote-floater { position: absolute; left: 50%; top: 50%; margin: -0.5em 0 0 -0.5em; font-size: 26px; line-height: 1; }
+/* Kupla avatarin oikealla tai vasemmalla puolella, keskitettynä pystysuunnassa */
+.chat-bubble.right { left: calc(100% + 8px); top: 50%; translate: 0 -50%; transform-origin: left center; border-bottom-left-radius: 4px; }
+.chat-bubble.left { right: calc(100% + 8px); top: 50%; translate: 0 -50%; transform-origin: right center; border-bottom-right-radius: 4px; }
+.chat-bubble.up { bottom: calc(100% + 8px); left: 50%; translate: -50% 0; transform-origin: center bottom; border-bottom-left-radius: 4px; max-width: 120px; }
+.chat-bubble.up-start { bottom: calc(100% + 8px); left: -4px; transform-origin: left bottom; border-bottom-left-radius: 4px; max-width: 120px; }
+.chat-bubble.up-end { bottom: calc(100% + 8px); right: -4px; transform-origin: right bottom; border-bottom-right-radius: 4px; max-width: 120px; }
+.seat .chat-bubble:not(.emote) { font-size: 12px; }
+
+.emote-btn {
+  aspect-ratio: 1;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font-size: 22px;
+  cursor: pointer;
+  transition: transform 0.12s var(--ease), background 0.12s ease;
+}
+.emote-btn:hover { background: var(--surface-2); }
+.emote-btn:active { transform: scale(0.88); }
+.phrase-btn {
+  min-height: 32px;
+  padding: 0 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.phrase-btn:active { transform: scale(0.95); }
+
+.chat-btn { position: relative; font-size: 16px; }
+.room-topbar-right { gap: 8px; }
+.unread {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.chat-head { display: flex; align-items: center; justify-content: space-between; }
+.chat-head .sheet-title { text-align: left; }
+.chat-log {
+  max-height: 34dvh;
+  min-height: 120px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+.chat-empty { font-size: 13px; text-align: center; margin: auto 0; }
+.chat-line { display: flex; flex-direction: column; gap: 1px; max-width: 85%; }
+.chat-line.mine { align-self: flex-end; align-items: flex-end; }
+.chat-name { font-size: 11px; font-weight: 700; }
+.chat-text { font-size: 14px; background: var(--surface-3); padding: 6px 10px; border-radius: 12px; overflow-wrap: anywhere; }
+.chat-line.mine .chat-text { background: var(--accent); color: var(--accent-ink); }
+.chat-text.emote { background: transparent !important; font-size: 28px; padding: 0; }
+.emote-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 2px; }
+.phrase-row { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none; }
+.chat-form { display: flex; gap: 8px; }
+.chat-form .input { flex: 1; min-width: 0; }
+.unread-inline {
+  margin-left: 8px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.pause-last-msg {
+  width: 100%;
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 13px;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}

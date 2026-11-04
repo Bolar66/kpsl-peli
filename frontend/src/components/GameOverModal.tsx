@@ -1,4 +1,5 @@
 import { motion } from 'framer-motion';
+import { useRef } from 'react';
 import Modal from './Modal';
 import { playerColor } from '../constants/players';
 
@@ -15,11 +16,15 @@ interface GameOverModalProps {
   winsRequired: number;
   standings: Standing[];
   myUsername: string;
+  matchWins: Record<number, number>;
   hostName: string | null;
   isHost: boolean;
   onReplay: () => void;
   onBackToLobby: () => void;
   onExit: () => void;
+  // Piilotettu yllätys: voittaja napauttaa pokaalia kolme kertaa
+  onSecret: () => void;
+  secretActive: boolean;
 }
 
 // Konfetti arvotaan kerran, jotta uudelleenpiirto ei muuta animaatiota
@@ -51,24 +56,38 @@ function Confetti() {
 }
 
 export default function GameOverModal({
-  winner, subtitle, modeLabel, winsRequired, standings, myUsername, hostName, isHost, onReplay, onBackToLobby, onExit,
+  winner, subtitle, modeLabel, winsRequired, standings, myUsername, matchWins, hostName, isHost, onReplay, onBackToLobby, onExit,
+  onSecret, secretActive,
 }: GameOverModalProps) {
   const iWon = winner === myUsername;
+  const taps = useRef<number[]>([]);
+
+  function handleTrophyTap() {
+    if (!iWon) return;
+    const now = Date.now();
+    taps.current = [...taps.current.filter(t => now - t < 1500), now];
+    if (taps.current.length >= 3) {
+      taps.current = [];
+      onSecret();
+    }
+  }
   const sorted = [...standings].sort((a, b) => b.wins - a.wins);
 
   return (
     <>
     {/* Konfetti ikkunan ulkopuolella, jotta se sataa koko näytölle */}
-    {iWon && <Confetti />}
+    {iWon && !secretActive && <Confetti />}
     <Modal open={!!winner} label="Peli päättyi">
       <motion.div
-        className={`trophy ${iWon ? 'won' : ''}`}
+        className={`trophy ${iWon ? 'won' : ''} ${secretActive ? 'lit' : ''}`}
+        onClick={handleTrophyTap}
         initial={{ scale: 0.4, rotate: -20, opacity: 0 }}
         animate={{ scale: 1, rotate: 0, opacity: 1 }}
         transition={{ type: 'spring', stiffness: 260, damping: 14, delay: 0.1 }}
         aria-hidden="true"
+        key={secretActive ? 'lit' : 'trophy'}
       >
-        🏆
+        {secretActive ? '🔥' : '🏆'}
       </motion.div>
       <h2 className="sheet-title">{iWon ? 'Voitit pelin!' : `${winner} voitti pelin`}</h2>
       <p className="sheet-sub">{subtitle ?? `${modeLabel} · ${winsRequired} ${winsRequired === 1 ? 'voitto' : 'voittoa'} voittaa`}</p>
@@ -79,6 +98,9 @@ export default function GameOverModal({
             <span className="standing-pos">{i + 1}</span>
             <span className="score-dot" style={{ background: playerColor(s.userId) }} />
             <span className="standing-name">{s.username === myUsername ? `${s.username} (sinä)` : s.username}</span>
+            {(matchWins[s.userId] ?? 0) > 0 && (
+              <span className="standing-match" title="Voitetut pelit tässä huoneessa">👑 {matchWins[s.userId]}</span>
+            )}
             <span className="standing-wins">{s.wins}</span>
           </li>
         ))}

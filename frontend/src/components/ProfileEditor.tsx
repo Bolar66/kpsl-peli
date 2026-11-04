@@ -11,7 +11,7 @@ interface ProfileEditorProps {
   open: boolean;
   profile: Profile;
   onClose: () => void;
-  onSave: (changes: Partial<Pick<Profile, 'username' | 'avatarEmoji' | 'avatarColor' | 'avatarImage'>>) => Promise<void>;
+  onSave: (changes: Partial<Pick<Profile, 'username' | 'avatarEmoji' | 'avatarColor' | 'avatarImage' | 'email'>>) => Promise<void>;
 }
 
 // Pienentää valitun kuvan neliöksi, jotta se mahtuu tietokantaan ja latautuu nopeasti
@@ -31,6 +31,7 @@ export default function ProfileEditor({ open, profile, onClose, onSave }: Profil
   const [emoji, setEmoji] = useState<string | null>(profile.avatarEmoji);
   const [color, setColor] = useState<string | null>(profile.avatarColor);
   const [image, setImage] = useState<string | null>(profile.avatarImage);
+  const [email, setEmail] = useState(profile.email ?? '');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -44,6 +45,7 @@ export default function ProfileEditor({ open, profile, onClose, onSave }: Profil
       setEmoji(profile.avatarEmoji);
       setColor(profile.avatarColor);
       setImage(profile.avatarImage);
+      setEmail(profile.email ?? '');
       setError('');
     }
   }
@@ -64,7 +66,7 @@ export default function ProfileEditor({ open, profile, onClose, onSave }: Profil
     setSaving(true);
     setError('');
     try {
-      await onSave({ username: username.trim(), avatarEmoji: emoji, avatarColor: color, avatarImage: image });
+      await onSave({ username: username.trim(), avatarEmoji: emoji, avatarColor: color, avatarImage: image, email: email.trim() || null });
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Tallennus epäonnistui');
@@ -93,6 +95,11 @@ export default function ProfileEditor({ open, profile, onClose, onSave }: Profil
       <label className="field">
         <span className="field-label">Nimimerkki</span>
         <input className="input" maxLength={20} value={username} onChange={(e) => setUsername(e.target.value)} />
+      </label>
+
+      <label className="field">
+        <span className="field-label">Sähköposti <span className="faint">— salasanan palautukseen, ei näy muille</span></span>
+        <input className="input" type="email" autoComplete="email" placeholder="nimi@esimerkki.fi" value={email} onChange={(e) => setEmail(e.target.value)} />
       </label>
 
       <div className="field">

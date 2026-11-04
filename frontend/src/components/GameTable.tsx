@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import Avatar, { type AvatarData } from './Avatar';
 import CountdownRing from './CountdownRing';
 import { computeLayout } from './tableLayout';
+import ChatBubble, { type BubbleData } from './ChatBubble';
 import { SYMBOL_INFO } from '../constants/symbols';
 
 export interface TablePlayer extends AvatarData {
@@ -16,13 +17,17 @@ export interface TablePlayer extends AvatarData {
   isWinner: boolean;
   revealedSymbol: string | null;
   streak: number;
+  matchWins: number;
+  leaf: boolean;
+  bubble: BubbleData | null;
 }
 
 interface GameTableProps {
   players: TablePlayer[];
   winsRequired: number;
   countdown: number | null;
-  duration: number;
+  endsAt: number | null;
+  totalMs: number;
   paused: boolean;
   isRevealPhase: boolean;
   isDraw: boolean;
@@ -147,7 +152,7 @@ function PlayCard({ player, isRevealPhase, isDraw, pump, index }: {
 }
 
 export default function GameTable({
-  players, winsRequired, countdown, duration, paused, isRevealPhase, isDraw,
+  players, winsRequired, countdown, endsAt, totalMs, paused, isRevealPhase, isDraw,
 }: GameTableProps) {
   const meIndex = Math.max(players.findIndex(p => p.isMe), 0);
   const ordered = [...players.slice(meIndex), ...players.slice(0, meIndex)];
@@ -176,11 +181,26 @@ export default function GameTable({
             </motion.div>
           ) : countdown !== null ? (
             <motion.div key="timer" initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.6 }}>
-              <CountdownRing countdown={countdown} duration={duration} />
+              <CountdownRing countdown={countdown} endsAt={endsAt} totalMs={totalMs} />
             </motion.div>
           ) : null}
         </AnimatePresence>
       </div>
+
+      <AnimatePresence>
+        {w > 0 && isRevealPhase && !isDraw && ordered.map((player, i) => player.isWinner && (
+          <motion.div
+            key={`spot-${player.userId}`}
+            className="spotlight"
+            style={{ left: layout.seats[i]?.seat.x, top: layout.seats[i]?.seat.y }}
+            initial={{ opacity: 0, scale: 0.4 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.6, delay: 0.45, ease: [0.2, 0.8, 0.2, 1] }}
+            aria-hidden="true"
+          />
+        ))}
+      </AnimatePresence>
 
       {w > 0 && ordered.map((player, i) => {
         const { seat, card, side } = layout.seats[i] ?? layout.seats[0]!;
@@ -192,12 +212,25 @@ export default function GameTable({
             </div>
 
             <div
-              className={`seat ${side ? 'side' : ''} ${player.isMe ? 'me' : ''} ${player.hasPicked && !isRevealPhase ? 'picked' : ''} ${player.isDnf ? 'dnf' : ''}`}
+              className={[
+                'seat',
+                side ? 'side' : '',
+                player.isMe ? 'me' : '',
+                player.hasPicked && !isRevealPhase ? 'picked' : '',
+                player.isDnf ? 'dnf' : '',
+                isRevealPhase && !isDraw ? (player.isWinner ? 'winner' : 'loser') : '',
+              ].join(' ')}
               style={{ left: seat.x, top: seat.y }}
             >
               <div className="seat-avatar">
                 <WinsRing wins={player.wins} required={winsRequired} size={58} />
                 <Avatar player={player} size={44} />
+                <ChatBubble bubble={player.bubble} side={seat.x > w / 2 + 10 ? 'left' : 'right'} />
+                {(player.matchWins > 0 || player.leaf) && (
+                  <span className="match-wins" title={`${player.matchWins} pelivoittoa tässä huoneessa`}>
+                    {player.matchWins > 0 && `👑${player.matchWins}`}{player.leaf && '🍃'}
+                  </span>
+                )}
               <AnimatePresence>
                 {player.streak >= 2 && (
                   <motion.span
@@ -244,6 +277,9 @@ export default function GameTable({
                       ))}
                     </span>
                   )}
+                  <span className={`seat-wins ${player.wins > 0 ? 'has' : ''}`} aria-label={`${player.wins}/${winsRequired} kierrosvoittoa`}>
+                    {player.wins}<small>/{winsRequired}</small>
+                  </span>
                 </div>
               </div>
             </div>

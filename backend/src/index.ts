@@ -11,6 +11,7 @@ import { clampNumber, parseRoomCode } from './utils/validation';
 import authRoutes from './routes/auth';
 import gameRoutes from './routes/games';
 import profileRoutes from './routes/profile';
+import feedbackRoutes from './routes/feedback';
 import {
   getGameIdByRoomCode, getLatestGameByRoomCode, getUserAvatar, markGameStarted, saveRound, finalizeGame, createGameRow,
 } from './db/gameQueries';
@@ -45,6 +46,7 @@ if (!isProduction) app.use(express.static('public'));
 app.use('/api/games', gameRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/profile', profileRoutes);
+app.use('/api/feedback', feedbackRoutes);
 
 const httpServer = createServer(app);
 const io = new Server(httpServer, { cors: { origin: '*' } });
@@ -158,6 +160,36 @@ const readyReasonByRoom: Record<string, ReadyReason> = {};
 const pausedByNameByRoom: Record<string, string> = {};
 const lastRevealByRoom: Record<string, { results: RevealResult[]; winners: string[]; isDraw: boolean }> = {};
 const gameOverWinnerByRoom: Record<string, string | null> = {};
+// Piilotettu yllätys: pelin voittaja voi laukaista sen kerran per peli (pidetään kirjaa laukaisuista)
+const easterEggUsedByRoom: Record<string, boolean> = {};
+
+// ---------- Chat ja emotet ----------
+interface ChatMessage {
+  id: number;
+  userId: number;
+  username: string;
+  text: string;
+  emote: boolean;
+  at: number;
+}
+const CHAT_HISTORY = 30;
+const CHAT_MAX_LENGTH = 120;
+// Sallitut emotet (pikapalkki); muut emojit kulkevat tavallisina viesteinä
+const EMOTES = new Set(['😂', '🔥', '👏', '😎', '😤', '🤯', '💀', '🙏', '😭', '🫡', '👀', '🍿']);
+const chatByRoom: Record<string, ChatMessage[]> = {};
+let nextChatId = 1;
+
+// Viestin siivous: ohjausmerkit ja näkymättömät suunnanvaihtomerkit pois, välilyönnit tiivistettynä
+function cleanChatText(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const text = value
+    // Ohjausmerkit, n\u00e4kym\u00e4tt\u00f6m\u00e4t v\u00e4lit ja suunnanvaihtomerkit pois (yhdist\u00e4v\u00e4 \u200d s\u00e4ilyy emojeja varten)
+    .replace(/[\u0000-\u001f\u007f\u200b\u200c\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!text) return null;
+  return Array.from(text).slice(0, CHAT_MAX_LENGTH).join('');
+}
 const roomCreatorByRoom: Record<string, number> = {};
 
 const MAX_PLAYERS = 4;
@@ -176,6 +208,19 @@ interface LobbySettings {
   roundGap: number;
 }
 const lobbySettingsByRoom: Record<string, LobbySettings> = {};
+
+// Kokonaisten pelien voitot samassa huoneessa ("Pelaa uudestaan" -kierrokset yhteen laskettuna)
+const matchWinsByRoom: Record<string, Record<number, number>> = {};
+
+function addMatchWin(roomCode: string, userId: number | undefined) {
+  if (userId === undefined) return;
+  if (!matchWinsByRoom[roomCode]) matchWinsByRoom[roomCode] = {};
+  matchWinsByRoom[roomCode]![userId] = (matchWinsByRoom[roomCode]![userId] || 0) + 1;
+}
+
+function matchWinsSnapshot(roomCode: string) {
+  return Object.entries(matchWinsByRoom[roomCode] || {}).map(([userId, wins]) => ({ userId: Number(userId), wins }));
+}
 
 function sanitizeSettings(input: unknown): LobbySettings {
   const s = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>;
@@ -293,7 +338,8 @@ function cleanupRoom(roomCode: string) {
   delete roundTimerEndAt[roomCode]; delete spedUp[roomCode];
   delete readyReasonByRoom[roomCode]; delete pausedByNameByRoom[roomCode];
   delete lastRevealByRoom[roomCode]; delete gameOverWinnerByRoom[roomCode]; delete roomCreatorByRoom[roomCode];
-  delete lobbySettingsByRoom[roomCode];
+  delete easterEggUsedByRoom[roomCode]; delete chatByRoom[roomCode];
+  delete lobbySettingsByRoom[roomCode]; delete matchWinsByRoom[roomCode];
   clearBotPicks(roomCode);
   console.log(`Huone ${roomCode}: siivottu kokonaan`);
 }
@@ -616,8 +662,19 @@ async function finalizeRound(
   if (gameWinnerEntry) {
     const winnerId = parseInt(gameWinnerEntry[0]);
     const gameWinner = players.find(p => p.userId === winnerId);
-    io.to(roomCode).emit('game:over', { winner: gameWinner?.username || null, finalWins: winsSnapshot });
+    addMatchWin(roomCode, gameWinner?.userId);
+    io.to(roomCode).emit('game:over', {
+      winner: gameWinner?.username || null, finalWins: winsSnapshot, matchWins: matchWinsSnapshot(roomCode),
+    });
     gameOverWinnerByRoom[roomCode] = gameWinner?.username || null;
+    easterEggUsedByRoom[roomCode] = false;
+
+    // Peli merkitään päättyneeksi heti (ennen tilastojen tallennusta), jotta voittoikkunan
+    // toiminnot toimivat saman tien. Ei cleanupRoom(): pelaajat pysyvät huoneessa uusintaa varten.
+    gameStarted[roomCode] = false;
+    clearTimeout(nextRoundTimers[roomCode]);
+    delete nextRoundTimers[roomCode];
+    delete pendingNextRoundNumber[roomCode];
 
     if (gameId) {
       try {
@@ -625,13 +682,6 @@ async function finalizeRound(
         await finalizeGame(gameId, mode, playerWins, symbolStatsByRoom[roomCode] || {}, winnerId);
       } catch (err) { console.error('Statsien tallennus epäonnistui:', err); }
     }
-
-    // TÄRKEÄ KORJAUS: ei enää cleanupRoom() tässä — pelaajat pysyvät huoneessa
-    // jotta "Pelaa uudestaan" / "Takaisin lobbyyn" toimivat.
-    gameStarted[roomCode] = false;
-    clearTimeout(nextRoundTimers[roomCode]);
-    delete nextRoundTimers[roomCode];
-    delete pendingNextRoundNumber[roomCode];
     return;
   }
 
@@ -684,7 +734,9 @@ async function endGameByForfeit(roomCode: string) {
   const winner = players[0]?.username ?? null;
   const finalWins = players.map(p => ({ username: p.username, wins: gameWins[roomCode]?.[p.userId] || 0 }));
   gameOverWinnerByRoom[roomCode] = winner;
-  io.to(roomCode).emit('game:over', { winner, finalWins, reason: 'forfeit' });
+  easterEggUsedByRoom[roomCode] = false;
+  addMatchWin(roomCode, players[0]?.userId);
+  io.to(roomCode).emit('game:over', { winner, finalWins, reason: 'forfeit', matchWins: matchWinsSnapshot(roomCode) });
   console.log(`Huone ${roomCode}: peli päättyi, muut pelaajat poistuivat`);
 
   const gameId = gameIdByRoom[roomCode];
@@ -770,6 +822,9 @@ function sendRoomState(socket: AuthenticatedSocket, roomCode: string) {
     remainingSeconds: roundActive && !roundPaused[roomCode]
       ? Math.max(Math.ceil(((roundTimerEndAt[roomCode] || Date.now()) - Date.now()) / 1000), 1)
       : null,
+    remainingMs: roundActive && !roundPaused[roomCode]
+      ? Math.max((roundTimerEndAt[roomCode] || Date.now()) - Date.now(), 0)
+      : null,
     myPick: roundActive ? (picks[socket.userId!] ?? null) : null,
     pickCount: roundActive ? {
       picked: Object.keys(picks).length,
@@ -788,6 +843,8 @@ function sendRoomState(socket: AuthenticatedSocket, roomCode: string) {
     } : null,
     gameOverWinner: !inProgress ? (gameOverWinner ?? null) : null,
     settings: lobbySettingsByRoom[roomCode] ?? null,
+    matchWins: matchWinsSnapshot(roomCode),
+    chat: chatByRoom[roomCode] ?? [],
   });
 }
 
@@ -1075,6 +1132,43 @@ io.on('connection', (socket: AuthenticatedSocket) => {
 
   // Tauko pysäyttää pelin aina kaikilta; peli jatkuu kun kaikki ovat kuitanneet olevansa valmiita.
   // Kesken kierroksen pysäytetty kierros aloitetaan tauon jälkeen alusta (valintoja ei paljasteta).
+  // Piilotettu yllätys voittoikkunassa: vain pelin voittaja, kerran per peli, näkyy kaikille
+  // Chat: vain huoneen pelaajat, enintään 120 merkkiä, oma tiukempi tahti tulvituksen estoon
+  let chatTokens = 5;
+  let chatLast = Date.now();
+  onEvent(socket, 'chat:send', ({ roomCode, text, emote }) => {
+    const sender = roomPlayers[roomCode]?.find(p => p.userId === socket.userId);
+    if (!sender) return;
+
+    const now = Date.now();
+    chatTokens = Math.min(5, chatTokens + (now - chatLast) / 1500);
+    chatLast = now;
+    if (chatTokens < 1) {
+      socket.emit('chat:slowdown');
+      return;
+    }
+
+    const isEmote = typeof emote === 'string' && EMOTES.has(emote);
+    const content = isEmote ? emote as string : cleanChatText(text);
+    if (!content) return;
+    chatTokens -= 1;
+
+    const message: ChatMessage = {
+      id: nextChatId++, userId: sender.userId, username: sender.username, text: content, emote: isEmote, at: now,
+    };
+    const history = (chatByRoom[roomCode] ??= []);
+    history.push(message);
+    if (history.length > CHAT_HISTORY) history.splice(0, history.length - CHAT_HISTORY);
+    io.to(roomCode).emit('chat:message', message);
+  });
+
+  onEvent(socket, 'easter:light', ({ roomCode }) => {
+    const winner = gameOverWinnerByRoom[roomCode];
+    if (!winner || winner !== socket.username || gameStarted[roomCode] || easterEggUsedByRoom[roomCode]) return;
+    easterEggUsedByRoom[roomCode] = true;
+    io.to(roomCode).emit('easter:light', { userId: socket.userId, username: socket.username });
+  });
+
   onEvent(socket, 'game:pauseToggle', ({ roomCode }) => {
     const players = roomPlayers[roomCode];
     if (!players || !socket.userId) return;

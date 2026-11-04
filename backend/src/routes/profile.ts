@@ -3,7 +3,7 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { pool } from '../db/pool';
 import { authenticateToken, AuthRequest } from '../middleware/auth';
-import { validatePassword, validateUsername } from '../utils/validation';
+import { validateEmail, validatePassword, validateUsername } from '../utils/validation';
 
 const router = Router();
 const SALT_ROUNDS = 10;
@@ -22,13 +22,14 @@ function toProfile(row: any) {
     avatarEmoji: row.avatar_emoji,
     avatarColor: row.avatar_color,
     avatarImage: row.avatar_image,
+    email: row.email,
     createdAt: row.created_at,
   };
 }
 
 async function loadUser(userId: number) {
   const result = await pool.query(
-    'SELECT id, username, password_hash, avatar_emoji, avatar_color, avatar_image, created_at FROM users WHERE id = $1',
+    'SELECT id, username, password_hash, email, avatar_emoji, avatar_color, avatar_image, created_at FROM users WHERE id = $1',
     [userId]
   );
   return result.rows[0] ?? null;
@@ -41,58 +42,54 @@ router.get('/me', authenticateToken, async (req: AuthRequest, res: Response) => 
     if (!user) return res.status(404).json({ error: 'Käyttäjää ei löytynyt' });
 
     // Vanhoista peleistä ei ole voittajaa tallessa — silloin voittaja on se jolla on tarvittava määrä voittoja.
-    // Tilastot lasketaan pelimuodoittain (klassinen / Lisko–Spock).
+    // Peli on bottipeli, jos siinä ei ollut muita oikeita pelaajia.
+    const myGames = `
+      SELECT g.id, g.mode, g.created_at, g.wins_required, gp.wins, w.username AS winner,
+             (g.winner_user_id = $1 OR (g.winner_user_id IS NULL AND gp.wins >= g.wins_required)) AS won,
+             NOT EXISTS (SELECT 1 FROM game_players o WHERE o.game_id = g.id AND o.user_id <> $1) AS vs_bots
+        FROM game_players gp
+        JOIN games g ON g.id = gp.game_id
+        LEFT JOIN users w ON w.id = g.winner_user_id
+       WHERE gp.user_id = $1 AND g.status = 'finished'`;
+
     const games = await pool.query(
-      `SELECT g.mode,
-              COUNT(*)::int AS games,
-              COUNT(*) FILTER (
-                WHERE g.winner_user_id = $1 OR (g.winner_user_id IS NULL AND gp.wins >= g.wins_required)
-              )::int AS wins,
-              COALESCE(SUM(gp.wins), 0)::int AS round_wins
-         FROM game_players gp
-         JOIN games g ON g.id = gp.game_id
-        WHERE gp.user_id = $1 AND g.status = 'finished'
-        GROUP BY g.mode`,
+      `SELECT mode, vs_bots, COUNT(*)::int AS games, COUNT(*) FILTER (WHERE won)::int AS wins,
+              COALESCE(SUM(wins), 0)::int AS round_wins
+         FROM (${myGames}) mg GROUP BY mode, vs_bots`,
       [req.userId]
     );
 
     const symbols = await pool.query(
-      `SELECT mode, symbol, SUM(count)::int AS count, SUM(wins)::int AS wins, SUM(losses)::int AS losses, SUM(draws)::int AS draws
-         FROM stats WHERE user_id = $1 GROUP BY mode, symbol`,
+      `SELECT mode, vs_bots, symbol, SUM(count)::int AS count, SUM(wins)::int AS wins,
+              SUM(losses)::int AS losses, SUM(draws)::int AS draws
+         FROM stats WHERE user_id = $1 GROUP BY mode, vs_bots, symbol`,
       [req.userId]
     );
 
-    const modeStats = (mode: string) => {
-      const row = games.rows.find(r => r.mode === mode);
-      return {
-        games: row?.games ?? 0,
-        wins: row?.wins ?? 0,
-        roundWins: row?.round_wins ?? 0,
-        symbols: symbols.rows.filter(r => r.mode === mode).map(({ mode: _mode, ...rest }) => rest),
-      };
-    };
+    const recent = await pool.query(`SELECT * FROM (${myGames}) mg ORDER BY id DESC LIMIT 5`, [req.userId]);
 
-    const recent = await pool.query(
-      `SELECT g.id, g.created_at, g.mode, g.wins_required, gp.wins,
-              (g.winner_user_id = $1 OR (g.winner_user_id IS NULL AND gp.wins >= g.wins_required)) AS won,
-              w.username AS winner
-         FROM game_players gp
-         JOIN games g ON g.id = gp.game_id
-         LEFT JOIN users w ON w.id = g.winner_user_id
-        WHERE gp.user_id = $1 AND g.status = 'finished'
-        ORDER BY g.id DESC
-        LIMIT 5`,
+    // Vastustajat, joita vastaan on pelattu (oikeat pelaajat), pelimuodoittain
+    const opponents = await pool.query(
+      `SELECT mg.mode, u.username, COUNT(*)::int AS games, COUNT(*) FILTER (WHERE mg.won)::int AS wins
+         FROM (${myGames}) mg
+         JOIN game_players o ON o.game_id = mg.id AND o.user_id <> $1
+         JOIN users u ON u.id = o.user_id
+        GROUP BY mg.mode, u.username`,
       [req.userId]
     );
 
     res.json({
       profile: toProfile(user),
       stats: {
-        byMode: { classic: modeStats('classic'), extended: modeStats('extended') },
+        games: games.rows.map(r => ({ mode: r.mode, vsBots: r.vs_bots, games: r.games, wins: r.wins, roundWins: r.round_wins })),
+        symbols: symbols.rows.map(r => ({
+          mode: r.mode, vsBots: r.vs_bots, symbol: r.symbol, count: r.count, wins: r.wins, losses: r.losses, draws: r.draws,
+        })),
         recent: recent.rows.map(r => ({
           id: r.id, playedAt: r.created_at, mode: r.mode, winsRequired: r.wins_required,
-          myWins: r.wins, won: !!r.won, winner: r.winner,
+          myWins: r.wins, won: !!r.won, winner: r.winner, vsBots: r.vs_bots,
         })),
+        opponents: opponents.rows,
       },
     });
   } catch (err) {
@@ -103,7 +100,7 @@ router.get('/me', authenticateToken, async (req: AuthRequest, res: Response) => 
 
 // Nimimerkin ja profiilikuvan muokkaus
 router.patch('/me', authenticateToken, async (req: AuthRequest, res: Response) => {
-  const { username, avatarEmoji, avatarColor, avatarImage } = req.body ?? {};
+  const { username, avatarEmoji, avatarColor, avatarImage, email } = req.body ?? {};
   const updates: string[] = [];
   const values: unknown[] = [];
   const set = (column: string, value: unknown) => { values.push(value); updates.push(`${column} = $${values.length}`); };
@@ -116,6 +113,15 @@ router.patch('/me', authenticateToken, async (req: AuthRequest, res: Response) =
       const taken = await pool.query('SELECT id FROM users WHERE LOWER(username) = LOWER($1) AND id <> $2', [name, req.userId]);
       if (taken.rows.length > 0) return res.status(409).json({ error: 'Nimimerkki on jo käytössä' });
       set('username', name);
+    }
+    if (email !== undefined) {
+      const checked = validateEmail(email);
+      if (!checked.ok) return res.status(400).json({ error: checked.error });
+      if (checked.email) {
+        const taken = await pool.query('SELECT id FROM users WHERE LOWER(email) = $1 AND id <> $2', [checked.email, req.userId]);
+        if (taken.rows.length > 0) return res.status(409).json({ error: 'Sähköposti on jo käytössä toisella tunnuksella' });
+      }
+      set('email', checked.email);
     }
     if (avatarEmoji !== undefined) {
       if (avatarEmoji !== null && (typeof avatarEmoji !== 'string' || avatarEmoji.length > 16)) {
