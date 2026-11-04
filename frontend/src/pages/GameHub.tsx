@@ -6,6 +6,8 @@ import AppHeader from '../components/AppHeader';
 import BowlLogo from '../components/BowlLogo';
 import FeedbackSheet from '../components/FeedbackSheet';
 import InstallHint from '../components/InstallHint';
+import WhatsNew from '../components/WhatsNew';
+import { hasUnseenWhatsNew } from '../constants/whatsNew';
 import './Lobby.css';
 
 // Tulevat pelit näytetään valikossa lukittuina, jotta pelaajat näkevät mitä on tulossa
@@ -19,11 +21,13 @@ const COMING_SOON = [
 export default function GameHub() {
   const { user } = useAuth();
   const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [whatsNewOpen, setWhatsNewOpen] = useState(hasUnseenWhatsNew);
 
   return (
     <div className="lobby-page">
       <AppHeader left={<BowlLogo size={30} />} />
       <FeedbackSheet open={feedbackOpen} onClose={() => setFeedbackOpen(false)} />
+      <WhatsNew open={whatsNewOpen} onClose={() => setWhatsNewOpen(false)} />
 
       <motion.main
         className="lobby-main"
@@ -62,9 +66,14 @@ export default function GameHub() {
           </div>
         </section>
 
-        <button className="feedback-link" onClick={() => setFeedbackOpen(true)}>
-          Bugi tai idea? <span>Anna palautetta</span>
-        </button>
+        <div className="hub-links">
+          <button className="feedback-link" onClick={() => setWhatsNewOpen(true)}>
+            <span>Mitä uutta?</span>
+          </button>
+          <button className="feedback-link" onClick={() => setFeedbackOpen(true)}>
+            Bugi tai idea? <span>Anna palautetta</span>
+          </button>
+        </div>
       </motion.main>
     </div>
   );

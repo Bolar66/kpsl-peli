@@ -12,6 +12,9 @@ import authRoutes from './routes/auth';
 import gameRoutes from './routes/games';
 import profileRoutes from './routes/profile';
 import feedbackRoutes from './routes/feedback';
+import friendRoutes from './routes/friends';
+import pushRoutes from './routes/push';
+import { attachPresence, setRoomResolvers, userConnected, userDisconnected } from './realtime/presence';
 import {
   getGameIdByRoomCode, getLatestGameByRoomCode, getUserAvatar, markGameStarted, saveRound, finalizeGame, createGameRow,
 } from './db/gameQueries';
@@ -39,7 +42,7 @@ app.use((_req, res, next) => {
   next();
 });
 app.disable('x-powered-by');
-app.use(express.json({ limit: '300kb' })); // profiilikuva mahtuu mukaan
+app.use(express.json({ limit: '700kb' })); // profiilikuva ja taustakuva mahtuvat mukaan
 // Kehityksen testisivu (public/test.html) vain paikallisesti, ei julkisessa versiossa
 if (!isProduction) app.use(express.static('public'));
 
@@ -47,6 +50,8 @@ app.use('/api/games', gameRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/profile', profileRoutes);
 app.use('/api/feedback', feedbackRoutes);
+app.use('/api/friends', friendRoutes);
+app.use('/api/push', pushRoutes);
 
 const httpServer = createServer(app);
 const io = new Server(httpServer, { cors: { origin: '*' } });
@@ -92,7 +97,7 @@ interface AuthenticatedSocket extends Socket {
   username?: string;
 }
 
-io.use((socket: AuthenticatedSocket, next) => {
+function authenticateSocket(socket: AuthenticatedSocket, next: (err?: Error) => void) {
   const token = socket.handshake.auth.token;
   if (!token) return next(new Error('Token puuttuu'));
   jwt.verify(token, process.env.JWT_SECRET!, (err: any, payload: any) => {
@@ -101,7 +106,19 @@ io.use((socket: AuthenticatedSocket, next) => {
     socket.username = payload.username;
     next();
   });
+}
+io.use(authenticateSocket);
+
+// Sovelluksen laajuinen yhteys: paikallaolo ja ilmoitukset (kutsut, kaveripyynnöt)
+const presenceNs = io.of('/presence');
+presenceNs.use(authenticateSocket);
+presenceNs.on('connection', (socket: AuthenticatedSocket) => {
+  const userId = socket.userId!;
+  socket.join(`user:${userId}`);
+  userConnected(userId);
+  socket.on('disconnect', () => userDisconnected(userId));
 });
+attachPresence(presenceNs);
 
 interface RoomPlayer {
   socketId: string;
@@ -191,6 +208,13 @@ function cleanChatText(value: unknown): string | null {
   return Array.from(text).slice(0, CHAT_MAX_LENGTH).join('');
 }
 const roomCreatorByRoom: Record<string, number> = {};
+
+// Kaverilista näyttää, kuka pelaa juuri nyt, ja kutsun voi lähettää vain huoneesta, jossa on itse
+setRoomResolvers({
+  inGame: (userId) => Object.keys(roomPlayers).some(code =>
+    gameStarted[code] && roomPlayers[code]!.some(p => p.userId === userId && p.isConnected && !p.isBot)),
+  isInRoom: (userId, roomCode) => !!roomPlayers[roomCode]?.some(p => p.userId === userId && !p.isBot),
+});
 
 const MAX_PLAYERS = 4;
 
@@ -650,6 +674,7 @@ async function finalizeRound(
         userId: p.userId,
         symbol: dnfSet.has(p.userId) ? null : (roundPicks[roomCode]?.[p.userId] ?? null),
         isBot: p.isBot,
+        outcome: isDraw ? 'draw' : winnerUserIds.includes(p.userId) ? 'win' : 'loss',
       })));
     } catch (err) { console.error('Kierroksen tallennus epäonnistui:', err); }
   }

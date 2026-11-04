@@ -83,7 +83,10 @@
   font-weight: 700;
   color: var(--accent-text);
 }
-.share-btn { min-height: 44px; padding: 0 16px; }
+.share-btn { min-height: 40px; padding: 0 14px; white-space: nowrap; }
+.invite-buttons { display: flex; flex-direction: column; gap: 6px; }
+.invite-list { margin-bottom: 8px; }
+.invited { font-size: 13px; font-weight: 600; color: var(--accent-text); }
 
 .lobby-section { display: flex; flex-direction: column; gap: 12px; padding: 14px 16px; }
 
@@ -951,22 +954,6 @@
 
 .chat-btn { position: relative; font-size: 16px; }
 .room-topbar-right { gap: 8px; }
-.unread {
-  position: absolute;
-  top: -4px;
-  right: -4px;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 4px;
-  border-radius: 999px;
-  background: var(--danger);
-  color: #fff;
-  font-size: 11px;
-  font-weight: 800;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
 
 .chat-head { display: flex; align-items: center; justify-content: space-between; }
 .chat-head .sheet-title { text-align: left; }

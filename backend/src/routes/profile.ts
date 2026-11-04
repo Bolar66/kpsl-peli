@@ -4,11 +4,16 @@ import jwt from 'jsonwebtoken';
 import { pool } from '../db/pool';
 import { authenticateToken, AuthRequest } from '../middleware/auth';
 import { validateEmail, validatePassword, validateUsername } from '../utils/validation';
+import { getUserStats, parseRange } from '../db/statsQueries';
+import { assignFriendCode } from '../utils/friendCode';
 
 const router = Router();
 const SALT_ROUNDS = 10;
 const GUEST_PASSWORD_MARKER = 'guest';
 const MAX_IMAGE_LENGTH = 200_000;
+const MAX_BANNER_LENGTH = 400_000;
+const MAX_BIO_LENGTH = 80;
+const IMAGE_DATA_URL = /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/;
 
 function signToken(user: { id: number; username: string }) {
   return jwt.sign({ userId: user.id, username: user.username }, process.env.JWT_SECRET!, { expiresIn: '30d' });
@@ -23,75 +28,46 @@ function toProfile(row: any) {
     avatarColor: row.avatar_color,
     avatarImage: row.avatar_image,
     email: row.email,
+    friendCode: row.password_hash === GUEST_PASSWORD_MARKER ? null : row.friend_code,
+    bio: row.bio,
+    bannerImage: row.banner_image,
     createdAt: row.created_at,
   };
 }
 
 async function loadUser(userId: number) {
   const result = await pool.query(
-    'SELECT id, username, password_hash, email, avatar_emoji, avatar_color, avatar_image, created_at FROM users WHERE id = $1',
+    'SELECT id, username, password_hash, email, avatar_emoji, avatar_color, avatar_image, friend_code, bio, banner_image, created_at FROM users WHERE id = $1',
     [userId]
   );
   return result.rows[0] ?? null;
 }
 
-// Oma profiili ja tilastot
+// Oma profiili ja tilastot (?range=all|last5|last20|30d)
 router.get('/me', authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
     const user = await loadUser(req.userId!);
     if (!user) return res.status(404).json({ error: 'Käyttäjää ei löytynyt' });
+    // Tunnukselliselle annetaan kaverikoodi ensimmäisellä kerralla
+    if (!user.friend_code && user.password_hash !== GUEST_PASSWORD_MARKER) {
+      user.friend_code = await assignFriendCode(user.id);
+    }
+    const stats = await getUserStats(req.userId!, parseRange(req.query.range), { includeOpponents: true });
+    res.json({ profile: toProfile(user), stats });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Palvelinvirhe' });
+  }
+});
 
-    // Vanhoista peleistä ei ole voittajaa tallessa — silloin voittaja on se jolla on tarvittava määrä voittoja.
-    // Peli on bottipeli, jos siinä ei ollut muita oikeita pelaajia.
-    const myGames = `
-      SELECT g.id, g.mode, g.created_at, g.wins_required, gp.wins, w.username AS winner,
-             (g.winner_user_id = $1 OR (g.winner_user_id IS NULL AND gp.wins >= g.wins_required)) AS won,
-             NOT EXISTS (SELECT 1 FROM game_players o WHERE o.game_id = g.id AND o.user_id <> $1) AS vs_bots
-        FROM game_players gp
-        JOIN games g ON g.id = gp.game_id
-        LEFT JOIN users w ON w.id = g.winner_user_id
-       WHERE gp.user_id = $1 AND g.status = 'finished'`;
-
-    const games = await pool.query(
-      `SELECT mode, vs_bots, COUNT(*)::int AS games, COUNT(*) FILTER (WHERE won)::int AS wins,
-              COALESCE(SUM(wins), 0)::int AS round_wins
-         FROM (${myGames}) mg GROUP BY mode, vs_bots`,
-      [req.userId]
-    );
-
-    const symbols = await pool.query(
-      `SELECT mode, vs_bots, symbol, SUM(count)::int AS count, SUM(wins)::int AS wins,
-              SUM(losses)::int AS losses, SUM(draws)::int AS draws
-         FROM stats WHERE user_id = $1 GROUP BY mode, vs_bots, symbol`,
-      [req.userId]
-    );
-
-    const recent = await pool.query(`SELECT * FROM (${myGames}) mg ORDER BY id DESC LIMIT 5`, [req.userId]);
-
-    // Vastustajat, joita vastaan on pelattu (oikeat pelaajat), pelimuodoittain
-    const opponents = await pool.query(
-      `SELECT mg.mode, u.username, COUNT(*)::int AS games, COUNT(*) FILTER (WHERE mg.won)::int AS wins
-         FROM (${myGames}) mg
-         JOIN game_players o ON o.game_id = mg.id AND o.user_id <> $1
-         JOIN users u ON u.id = o.user_id
-        GROUP BY mg.mode, u.username`,
-      [req.userId]
-    );
-
-    res.json({
-      profile: toProfile(user),
-      stats: {
-        games: games.rows.map(r => ({ mode: r.mode, vsBots: r.vs_bots, games: r.games, wins: r.wins, roundWins: r.round_wins })),
-        symbols: symbols.rows.map(r => ({
-          mode: r.mode, vsBots: r.vs_bots, symbol: r.symbol, count: r.count, wins: r.wins, losses: r.losses, draws: r.draws,
-        })),
-        recent: recent.rows.map(r => ({
-          id: r.id, playedAt: r.created_at, mode: r.mode, winsRequired: r.wins_required,
-          myWins: r.wins, won: !!r.won, winner: r.winner, vsBots: r.vs_bots,
-        })),
-        opponents: opponents.rows,
-      },
-    });
+// Kaverikoodin vaihto uuteen (vanha lakkaa toimimasta)
+router.post('/friend-code', authenticateToken, async (req: AuthRequest, res: Response) => {
+  try {
+    const user = await loadUser(req.userId!);
+    if (!user) return res.status(404).json({ error: 'Käyttäjää ei löytynyt' });
+    if (user.password_hash === GUEST_PASSWORD_MARKER) return res.status(403).json({ error: 'Kaverikoodi vaatii tunnuksen' });
+    const friendCode = await assignFriendCode(user.id);
+    res.json({ friendCode });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Palvelinvirhe' });
@@ -100,7 +76,7 @@ router.get('/me', authenticateToken, async (req: AuthRequest, res: Response) => 
 
 // Nimimerkin ja profiilikuvan muokkaus
 router.patch('/me', authenticateToken, async (req: AuthRequest, res: Response) => {
-  const { username, avatarEmoji, avatarColor, avatarImage, email } = req.body ?? {};
+  const { username, avatarEmoji, avatarColor, avatarImage, email, bio, bannerImage } = req.body ?? {};
   const updates: string[] = [];
   const values: unknown[] = [];
   const set = (column: string, value: unknown) => { values.push(value); updates.push(`${column} = $${values.length}`); };
@@ -138,12 +114,27 @@ router.patch('/me', authenticateToken, async (req: AuthRequest, res: Response) =
     if (avatarImage !== undefined) {
       if (avatarImage !== null && (
         typeof avatarImage !== 'string'
-        || !/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(avatarImage)
+        || !IMAGE_DATA_URL.test(avatarImage)
         || avatarImage.length > MAX_IMAGE_LENGTH
       )) {
         return res.status(400).json({ error: 'Kuva on liian suuri tai väärää muotoa' });
       }
       set('avatar_image', avatarImage);
+    }
+    if (bio !== undefined) {
+      if (bio !== null && typeof bio !== 'string') return res.status(400).json({ error: 'Virheellinen bio' });
+      // Ohjausmerkit ja näkymättömät merkit pois, rivinvaihdot välilyönneiksi
+      const clean = typeof bio === 'string'
+        ? bio.replace(/[\u0000-\u001f\u007f\u200b\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, ' ').replace(/\s+/g, ' ').trim()
+        : '';
+      if (clean.length > MAX_BIO_LENGTH) return res.status(400).json({ error: `Bio voi olla enintään ${MAX_BIO_LENGTH} merkkiä` });
+      set('bio', clean || null);
+    }
+    if (bannerImage !== undefined) {
+      if (bannerImage !== null && (typeof bannerImage !== 'string' || !IMAGE_DATA_URL.test(bannerImage) || bannerImage.length > MAX_BANNER_LENGTH)) {
+        return res.status(400).json({ error: 'Taustakuva on liian suuri tai väärää muotoa' });
+      }
+      set('banner_image', bannerImage);
     }
 
     if (updates.length > 0) {

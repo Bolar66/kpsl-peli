@@ -207,3 +207,28 @@
 }
 .coming-card b { color: var(--text-2); font-size: 13px; }
 .coming-emoji { font-size: 22px; margin-bottom: 4px; filter: grayscale(0.6); opacity: 0.8; }
+
+.hub-links { display: flex; flex-direction: column; align-items: center; gap: 0; }
+
+/* ---------- Uutta BOWLissa ---------- */
+.whats-new { display: flex; flex-direction: column; gap: 14px; }
+.whats-new-eyebrow { text-align: center; margin: 0; }
+.whats-new-slide { display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; min-height: 290px; }
+.whats-new-art { height: 80px; display: flex; align-items: center; justify-content: center; }
+.whats-new-emoji { font-size: 56px; line-height: 1; }
+.whats-new-slide .sheet-title { margin: 0; }
+.whats-new-text { margin: 0; color: var(--text-2); font-size: 15px; line-height: 1.5; }
+.whats-new-tip {
+  margin: 4px 0 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.45;
+  text-align: left;
+}
+.whats-new-dots { display: flex; justify-content: center; gap: 6px; }
+.whats-new-dots span { width: 7px; height: 7px; border-radius: 50%; background: var(--border-strong); transition: width 0.2s var(--ease), background 0.2s ease; }
+.whats-new-dots span.active { width: 20px; border-radius: 4px; background: var(--accent); }
+.whats-new-actions { display: grid; grid-template-columns: 1fr 2fr; gap: 8px; }

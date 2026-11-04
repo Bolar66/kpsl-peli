@@ -4,6 +4,7 @@ import { MODE_LABEL, type GameMode } from '../constants/symbols';
 import Avatar, { type AvatarData } from './Avatar';
 import Modal from './Modal';
 import ChatBubble, { type BubbleData } from './ChatBubble';
+import InviteFriendsSheet from './InviteFriendsSheet';
 
 export interface LobbySettings {
   mode: GameMode;
@@ -75,6 +76,7 @@ export default function RoomLobby({
 }: RoomLobbyProps) {
   const [copied, setCopied] = useState(false);
   const [showTimes, setShowTimes] = useState(false);
+  const [inviteOpen, setInviteOpen] = useState(false);
   const host = players.find(p => p.isHost);
   const enoughPlayers = players.length >= 2;
   const readOnly = !isHost;
@@ -111,10 +113,19 @@ export default function RoomLobby({
             {roomCode.split('').map((c, i) => <span key={i}>{c}</span>)}
           </div>
         </div>
-        <button className="btn btn-secondary btn-sm share-btn" onClick={handleShare}>
-          {copied ? '✓ Kopioitu' : 'Kutsu'}
-        </button>
+        <div className="invite-buttons">
+          <button className="btn btn-primary btn-sm share-btn" onClick={() => setInviteOpen(true)}>👥 Kutsu kavereita</button>
+          <button className="btn btn-secondary btn-sm share-btn" onClick={handleShare}>
+            {copied ? '✓ Kopioitu' : 'Jaa linkki'}
+          </button>
+        </div>
       </section>
+      <InviteFriendsSheet
+        open={inviteOpen}
+        onClose={() => setInviteOpen(false)}
+        roomCode={roomCode}
+        memberIds={players.map(p => p.userId)}
+      />
 
       <section className="card lobby-section">
         <div className="section-head">

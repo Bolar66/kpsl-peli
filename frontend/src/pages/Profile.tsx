@@ -3,41 +3,14 @@ import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { AuthError } from '../api/games';
-import { deleteMyAccount, getMyProfile, setPassword, updateMyProfile, type Profile as ProfileData, type ProfileStats } from '../api/profile';
-import Avatar from '../components/Avatar';
+import { deleteMyAccount, getMyProfile, setPassword, updateMyProfile, type Profile as ProfileData, type ProfileStats, type StatsRange } from '../api/profile';
 import ProfileEditor from '../components/ProfileEditor';
+import ProfileHeader from '../components/ProfileHeader';
+import StatsPanel from '../components/StatsPanel';
 import Modal from '../components/Modal';
-import { MODE_LABEL, SYMBOL_INFO, SYMBOLS_BY_MODE } from '../constants/symbols';
 import { setThemePreference, useThemePreference, type ThemePreference } from '../constants/theme';
 import './Lobby.css';
 import './Profile.css';
-
-function percent(part: number, total: number) {
-  return total > 0 ? Math.round((part / total) * 100) : 0;
-}
-
-type StatsView = 'all' | 'classic' | 'extended';
-type OpponentView = 'all' | 'players' | 'bots';
-
-// Suodattaa tilastot valitun pelimuodon ja vastustajatyypin mukaan ja laskee ne yhteen
-function summarize(stats: ProfileStats, view: StatsView, opponents: OpponentView) {
-  const matches = (row: { mode: string; vsBots: boolean }) =>
-    (view === 'all' || row.mode === view) &&
-    (opponents === 'all' || (opponents === 'bots') === row.vsBots);
-
-  const games = stats.games.filter(matches);
-  const symbols = new Map<string, { count: number; wins: number }>();
-  for (const s of stats.symbols.filter(matches)) {
-    const prev = symbols.get(s.symbol) ?? { count: 0, wins: 0 };
-    symbols.set(s.symbol, { count: prev.count + s.count, wins: prev.wins + s.wins });
-  }
-  return {
-    games: games.reduce((n, g) => n + g.games, 0),
-    wins: games.reduce((n, g) => n + g.wins, 0),
-    roundWins: games.reduce((n, g) => n + g.roundWins, 0),
-    symbols,
-  };
-}
 
 const THEME_OPTIONS: { value: ThemePreference; label: string }[] = [
   { value: 'system', label: 'Automaattinen' },
@@ -55,8 +28,8 @@ export default function Profile() {
   const [editing, setEditing] = useState(false);
   const [passwordOpen, setPasswordOpen] = useState(false);
   const [confirmLogout, setConfirmLogout] = useState(false);
-  const [view, setView] = useState<StatsView>('all');
-  const [opponentView, setOpponentView] = useState<OpponentView>('all');
+  const [range, setRange] = useState<StatsRange>('all');
+  const [loadingStats, setLoadingStats] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -79,10 +52,18 @@ export default function Profile() {
 
   useEffect(() => {
     if (!token) return;
-    getMyProfile(token)
-      .then(data => { setProfile(data.profile); setStats(data.stats); })
-      .catch(handleError);
-  }, [token, handleError]);
+    let cancelled = false;
+    getMyProfile(token, range)
+      .then(data => { if (!cancelled) { setProfile(data.profile); setStats(data.stats); } })
+      .catch(handleError)
+      .finally(() => { if (!cancelled) setLoadingStats(false); });
+    return () => { cancelled = true; };
+  }, [token, range, handleError]);
+
+  function changeRange(next: StatsRange) {
+    setLoadingStats(true);
+    setRange(next);
+  }
 
   async function handleSave(changes: Parameters<typeof updateMyProfile>[1]) {
     const data = await updateMyProfile(token!, changes);
@@ -97,34 +78,7 @@ export default function Profile() {
     });
   }
 
-  const shown = stats ? summarize(stats, view, opponentView) : null;
-  // Lisko ja Spock näytetään kun katsotaan Lisko–Spock-pelejä, tai kun niitä on pelattu
-  const playedExtended = !!stats && stats.games.some(g => g.mode === 'extended');
-  const symbolOrder = view === 'classic' || (view === 'all' && !playedExtended) ? SYMBOLS_BY_MODE.classic : SYMBOLS_BY_MODE.extended;
-  const symbolRows = shown
-    ? symbolOrder.map(symbol => ({ symbol, count: shown.symbols.get(symbol)?.count ?? 0, wins: shown.symbols.get(symbol)?.wins ?? 0 }))
-    : [];
-  // Kolme vastustajaa, joita vastaan on eniten pelivoittoja (vain oikeat pelaajat)
-  const topOpponents = stats
-    ? [...stats.opponents
-        .filter(o => view === 'all' || o.mode === view)
-        .reduce((map, o) => {
-          const prev = map.get(o.username) ?? { username: o.username, games: 0, wins: 0 };
-          map.set(o.username, { username: o.username, games: prev.games + o.games, wins: prev.wins + o.wins });
-          return map;
-        }, new Map<string, { username: string; games: number; wins: number }>())
-        .values()]
-        .sort((a, b) => b.wins - a.wins || b.games - a.games)
-        .slice(0, 3)
-    : [];
-  const countFor = (mode: StatsView) => stats?.games.filter(g => mode === 'all' || g.mode === mode).reduce((n, g) => n + g.games, 0) ?? 0;
-  const recentShown = stats?.recent.filter(g =>
-    (view === 'all' || g.mode === view) && (opponentView === 'all' || (opponentView === 'bots') === g.vsBots)) ?? [];
-  const totalPicks = symbolRows.reduce((sum, r) => sum + r.count, 0);
-  const totalRoundWins = symbolRows.reduce((sum, r) => sum + r.wins, 0);
-  const favorite = totalPicks > 0 ? [...symbolRows].sort((a, b) => b.count - a.count)[0] : null;
-
-  const displayed = profile ?? (user ? { id: user.id, username: user.username, isGuest: false, avatarEmoji: user.avatarEmoji ?? null, avatarColor: user.avatarColor ?? null, avatarImage: user.avatarImage ?? null, createdAt: '' } : null);
+  const displayed = profile ?? (user ? { id: user.id, username: user.username, avatarEmoji: user.avatarEmoji ?? null, avatarColor: user.avatarColor ?? null, avatarImage: user.avatarImage ?? null } : null);
 
   return (
     <div className="lobby-page">
@@ -143,12 +97,9 @@ export default function Profile() {
         {error && <p className="alert alert-danger" role="alert">{error}</p>}
 
         {displayed && (
-          <section className="profile-hero">
-            <Avatar player={{ userId: displayed.id, username: displayed.username, avatarEmoji: displayed.avatarEmoji, avatarColor: displayed.avatarColor, avatarImage: displayed.avatarImage }} size={96} />
-            <h1>{displayed.username}</h1>
-            {profile?.isGuest && <span className="badge">Vieras</span>}
+          <ProfileHeader user={profile ?? displayed} badge={profile?.isGuest ? <span className="badge">Vieras</span> : undefined}>
             <button className="btn btn-secondary btn-sm" onClick={() => setEditing(true)} disabled={!profile}>Muokkaa profiilia</button>
-          </section>
+          </ProfileHeader>
         )}
 
         {profile?.isGuest && (
@@ -161,127 +112,7 @@ export default function Profile() {
           </section>
         )}
 
-        {stats && shown && (
-          <>
-            <div className="seg" role="tablist" aria-label="Pelimuoto">
-              {([['all', 'Kaikki'], ['classic', MODE_LABEL.classic], ['extended', MODE_LABEL.extended]] as [StatsView, string][]).map(([value, label]) => (
-                <button
-                  key={value}
-                  role="tab"
-                  aria-selected={view === value}
-                  className={view === value ? 'active' : ''}
-                  onClick={() => setView(value)}
-                >
-                  {label}
-                  {value !== 'all' && <span className="seg-count"> {countFor(value)}</span>}
-                </button>
-              ))}
-            </div>
-
-            <div className="seg" role="tablist" aria-label="Vastustajat">
-              {([['all', 'Kaikki'], ['players', 'Kavereita vastaan'], ['bots', 'Botteja vastaan']] as [OpponentView, string][]).map(([value, label]) => (
-                <button
-                  key={value}
-                  role="tab"
-                  aria-selected={opponentView === value}
-                  className={opponentView === value ? 'active' : ''}
-                  onClick={() => setOpponentView(value)}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-
-            <section className="stat-grid">
-              <div className="stat"><span className="stat-num">{shown.games}</span><span className="stat-label">Pelejä</span></div>
-              <div className="stat"><span className="stat-num accent">{shown.wins}</span><span className="stat-label">Voittoja</span></div>
-              <div className="stat"><span className="stat-num">{percent(shown.wins, shown.games)}%</span><span className="stat-label">Voitto-%</span></div>
-              <div className="stat"><span className="stat-num">{shown.roundWins}</span><span className="stat-label">Kierrosvoittoja</span></div>
-            </section>
-
-            <section className="card">
-              <div className="section-head">
-                <h2>Valintasi</h2>
-                {favorite && <span className="faint">Suosikki: {SYMBOL_INFO[favorite.symbol]?.emoji} {SYMBOL_INFO[favorite.symbol]?.label}</span>}
-              </div>
-              {totalPicks === 0 ? (
-                <p className="muted empty-stats">
-                  {view === 'extended'
-                    ? 'Et ole vielä pelannut Lisko–Spockia. Kokeile sitä seuraavaksi!'
-                    : 'Pelaa ensimmäinen pelisi, niin näet täällä mitä käsiä suosit.'}
-                </p>
-              ) : (
-                <ul className="pick-stats">
-                  {symbolRows.map(r => (
-                    <li key={r.symbol}>
-                      <span className="pick-stats-emoji">{SYMBOL_INFO[r.symbol]?.emoji}</span>
-                      <div className="pick-stats-body">
-                        <div className="pick-stats-top">
-                          <span>{SYMBOL_INFO[r.symbol]?.label}</span>
-                          <span className="faint">{percent(r.count, totalPicks)}% · voitti {percent(r.wins, r.count)}%</span>
-                        </div>
-                        <div className="score-bar">
-                          <motion.div
-                            className="score-fill"
-                            style={{ background: favorite?.symbol === r.symbol ? 'var(--accent)' : undefined }}
-                            initial={{ width: 0 }}
-                            animate={{ width: `${percent(r.count, totalPicks)}%` }}
-                            transition={{ duration: 0.6, ease: [0.2, 0.8, 0.2, 1] }}
-                          />
-                        </div>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              {totalPicks > 0 && (
-                <p className="faint pick-stats-foot">{totalPicks} ratkaistua kierrosta, joista voitit {percent(totalRoundWins, totalPicks)}%</p>
-              )}
-            </section>
-
-            {opponentView !== 'bots' && (
-              <section className="card">
-                <div className="section-head">
-                  <h2>Eniten voittoja vastaan</h2>
-                  <span className="faint">kaverit</span>
-                </div>
-                {topOpponents.length === 0 ? (
-                  <p className="muted empty-stats">Pelaa kavereita vastaan, niin näet täällä ketä vastaan voitat useimmin.</p>
-                ) : (
-                  <ol className="opponents">
-                    {topOpponents.map((o, i) => (
-                      <li key={o.username}>
-                        <span className="opponent-rank">{['🥇', '🥈', '🥉'][i]}</span>
-                        <span className="opponent-name">{o.username}</span>
-                        <span className="opponent-score">
-                          <b>{o.wins}</b> voittoa <span className="faint">/ {o.games} peliä</span>
-                        </span>
-                      </li>
-                    ))}
-                  </ol>
-                )}
-              </section>
-            )}
-
-            {recentShown.length > 0 && (
-              <section className="card">
-                <div className="section-head"><h2>Viimeisimmät pelit</h2></div>
-                <ul className="recent-list">
-                  {recentShown.map(g => (
-                    <li key={g.id}>
-                      <span className={`result-pill ${g.won ? 'won' : ''}`}>{g.won ? 'Voitto' : 'Häviö'}</span>
-                      <span className="recent-main">
-                        {MODE_LABEL[g.mode] ?? g.mode}{g.vsBots ? ' · botit' : ''}
-                        <span className="faint"> · {g.myWins}/{g.winsRequired}{!g.won && g.winner ? ` · voittaja ${g.winner}` : ''}</span>
-                      </span>
-                      <span className="faint recent-date">{new Date(g.playedAt).toLocaleDateString('fi-FI', { day: 'numeric', month: 'numeric' })}</span>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            )}
-          </>
-        )}
+        {stats && <StatsPanel stats={stats} range={range} onRangeChange={changeRange} own loading={loadingStats} />}
 
         {!stats && !error && <p className="muted">Ladataan…</p>}
 

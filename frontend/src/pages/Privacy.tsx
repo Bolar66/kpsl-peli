@@ -26,6 +26,8 @@ export default function Privacy() {
             <li><b>Nimimerkki</b> ja, jos olet luonut tunnuksen, <b>salasana</b> salattuna (bcrypt). Salasanaa ei voi lukea selväkielisenä.</li>
             <li><b>Profiilikuva</b>, jos lisäät sellaisen (emoji, väri tai oma kuva).</li>
             <li><b>Pelitiedot:</b> pelatut pelit, kierrosten valinnat ja niistä lasketut tilastot.</li>
+            <li><b>Kaverit:</b> kaverikoodisi, kaverisuhteet ja -pyynnöt. Kaverisi näkevät julkisen profiilisi (bio, taustakuva, tilastot) ja sen, oletko paikalla tai pelissä.</li>
+            <li><b>Ilmoitukset</b>, jos otat ne käyttöön: selaimen ilmoitustilaus, jolla pelikutsut ja kaveripyynnöt toimitetaan puhelimeesi. Voit poistaa ne käytöstä milloin tahansa.</li>
             <li><b>Palaute</b>, jos lähetät sellaisen: viesti, nimimerkkisi sekä selaimen ja laitteen tyyppi vikojen selvittämistä varten.</li>
           </ul>
           <p className="muted">Nimimerkkisi ja profiilikuvasi näkyvät muille pelaajille samassa huoneessa.</p>

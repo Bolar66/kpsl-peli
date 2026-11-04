@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { inviteFriend } from '../api/friends';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../hooks/useSocket';
 import GameTable from '../components/GameTable';
@@ -67,6 +68,9 @@ export default function Room() {
   const { token, user, logout } = useAuth();
   const { socket, connected } = useSocket(token);
   const navigate = useNavigate();
+  const location = useLocation();
+  // Kaverilistan "Kutsu peliin" luo huoneen ja välittää kutsuttavan tänne
+  const inviteFriendId = (location.state as { inviteFriendId?: number } | null)?.inviteFriendId;
 
   const [players, setPlayers] = useState<Player[]>([]);
   const [settings, setSettings] = useState<LobbySettings>(DEFAULT_SETTINGS);
@@ -432,6 +436,15 @@ export default function Room() {
   }, [countdown, paused, revealResults]);
 
 
+
+  // Kutsu lähetetään vasta kun olet itse huoneessa (palvelin tarkistaa sen). Tila tyhjennetään heti,
+  // ettei kutsua lähetetä uudelleen esim. sivun päivityksessä.
+  const amInRoom = players.some(p => p.userId === user?.id);
+  useEffect(() => {
+    if (!inviteFriendId || !amInRoom || !token || !roomCode) return;
+    navigate(location.pathname, { replace: true, state: null });
+    inviteFriend(token, inviteFriendId, roomCode).catch(err => console.warn('Kutsu epäonnistui', err));
+  }, [inviteFriendId, amInRoom, token, roomCode, navigate, location.pathname]);
 
   function sendChat(message: { text?: string; emote?: string }) {
     socket?.emit('chat:send', { roomCode, ...message });

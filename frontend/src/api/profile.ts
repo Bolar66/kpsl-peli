@@ -9,8 +9,13 @@ export interface Profile {
   avatarColor: string | null;
   avatarImage: string | null;
   email: string | null;
+  friendCode: string | null;
+  bio: string | null;
+  bannerImage: string | null;
   createdAt: string;
 }
+
+export type StatsRange = 'all' | 'last5' | 'last20' | '30d';
 
 export interface SymbolStat {
   symbol: string;
@@ -18,6 +23,7 @@ export interface SymbolStat {
   wins: number;
   losses: number;
   draws: number;
+  decided: number;
 }
 
 export interface RecentGame {
@@ -48,6 +54,7 @@ export interface OpponentRow {
 
 // Rivit pelimuodoittain ja vastustajatyypeittäin; profiilisivu suodattaa ja laskee yhteen
 export interface ProfileStats {
+  range: StatsRange;
   games: GameStatRow[];
   symbols: (SymbolStat & { mode: 'classic' | 'extended'; vsBots: boolean })[];
   recent: RecentGame[];
@@ -67,11 +74,15 @@ async function request<T>(token: string, path: string, method = 'GET', body?: un
   return data;
 }
 
-export function getMyProfile(token: string) {
-  return request<{ profile: Profile; stats: ProfileStats }>(token, '/me');
+export function getMyProfile(token: string, range: StatsRange = 'all') {
+  return request<{ profile: Profile; stats: ProfileStats }>(token, `/me?range=${range}`);
 }
 
-export function updateMyProfile(token: string, changes: Partial<Pick<Profile, 'username' | 'avatarEmoji' | 'avatarColor' | 'avatarImage' | 'email'>>) {
+export function regenerateFriendCode(token: string) {
+  return request<{ friendCode: string }>(token, '/friend-code', 'POST');
+}
+
+export function updateMyProfile(token: string, changes: Partial<Pick<Profile, 'username' | 'avatarEmoji' | 'avatarColor' | 'avatarImage' | 'email' | 'bio' | 'bannerImage'>>) {
   return request<{ profile: Profile; token: string }>(token, '/me', 'PATCH', changes);
 }
 

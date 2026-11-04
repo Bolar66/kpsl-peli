@@ -404,3 +404,73 @@ button { font: inherit; color: inherit; }
 .wake-hands span:nth-child(3) { animation-delay: 0.3s; }
 @keyframes wake-bounce { 0%, 60%, 100% { transform: translateY(0); } 30% { transform: translateY(-10px); } }
 @media (prefers-reduced-motion: reduce) { .wake-hands span { animation: none; } }
+
+/* Lukemattomien merkki napin kulmassa (chat, kaveripyynnöt) */
+.unread {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ---------- Ilmoitukset (pelikutsut, kaveripyynnöt) ---------- */
+.toast-stack {
+  position: fixed;
+  top: calc(env(safe-area-inset-top) + 10px);
+  left: 50%;
+  translate: -50% 0;
+  z-index: 150;
+  width: min(440px, calc(100vw - 20px));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+}
+.toast {
+  pointer-events: auto;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 34px 10px 10px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  box-shadow: 0 12px 32px var(--shadow-color);
+}
+.toast.invite { border-color: var(--accent-line); }
+.toast-text { flex: 1; min-width: 0; display: flex; flex-direction: column; font-size: 14px; line-height: 1.3; }
+.toast-text span { font-size: 12px; color: var(--text-2); }
+.toast .btn { flex-shrink: 0; }
+.toast-close {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 26px;
+  height: 26px;
+  border: none;
+  background: none;
+  color: var(--text-3);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.friends-btn { position: relative; text-decoration: none; }
+
+/* Paikallaolo: vihreä piste paikalla olevalle, lime pelaavalle */
+.presence { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-3); }
+.presence::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--border-strong); }
+.presence.online { color: var(--text-2); }
+.presence.online::before { background: #3DDC84; }
+.presence.playing { color: var(--accent-text); font-weight: 600; }
+.presence.playing::before { background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }

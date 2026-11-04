@@ -38,7 +38,7 @@ export async function markGameStarted(gameId: number, playerUserIds: number[]): 
 export async function saveRound(
   gameId: number,
   roundNumber: number,
-  picks: { userId: number; symbol: string | null; isBot: boolean }[]
+  picks: { userId: number; symbol: string | null; isBot: boolean; outcome: 'win' | 'loss' | 'draw' }[]
 ): Promise<void> {
   const roundResult = await pool.query(
     'INSERT INTO rounds (game_id, round_number, resolved_at) VALUES ($1, $2, now()) RETURNING id',
@@ -49,8 +49,8 @@ export async function saveRound(
   for (const pick of picks) {
     if (pick.symbol === null || !isRealUser(pick.userId)) continue;
     await pool.query(
-      'INSERT INTO round_picks (round_id, user_id, symbol, is_bot_pick) VALUES ($1, $2, $3, $4)',
-      [roundId, pick.userId, pick.symbol, pick.isBot]
+      'INSERT INTO round_picks (round_id, user_id, symbol, is_bot_pick, outcome) VALUES ($1, $2, $3, $4, $5)',
+      [roundId, pick.userId, pick.symbol, pick.isBot, pick.outcome]
     );
   }
 }

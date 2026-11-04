@@ -118,3 +118,46 @@
 .theme-card { display: flex; flex-direction: column; gap: 12px; }
 .theme-note { margin: 0; font-size: 12px; }
 .card.theme-card > .section-head { margin-bottom: 0; }
+
+/* ---------- Profiilin yläosa ja taustakuva ---------- */
+.profile-header {
+  position: relative;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+.profile-banner {
+  aspect-ratio: 3 / 1;
+  background-size: cover;
+  background-position: center;
+}
+.profile-banner.empty {
+  background:
+    radial-gradient(circle at 20% 30%, var(--accent-soft), transparent 55%),
+    radial-gradient(circle at 85% 70%, var(--accent-soft), transparent 50%),
+    var(--surface-2);
+}
+.profile-header-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 0 16px 18px;
+  text-align: center;
+}
+.profile-header-avatar {
+  margin-top: -44px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 4px var(--surface);
+}
+.profile-header h1 { font-size: 24px; }
+.profile-bio { margin: 0; color: var(--text-2); font-size: 14px; max-width: 320px; overflow-wrap: anywhere; }
+.profile-header .presence { margin-top: -2px; }
+
+.editor-banner { display: flex; flex-direction: column; gap: 8px; }
+.editor-banner .profile-banner { border-radius: var(--radius); border: 1px solid var(--border); }
+.editor-banner-actions { display: flex; gap: 8px; }
+
+.stats-panel { display: flex; flex-direction: column; gap: 14px; transition: opacity 0.2s ease; }
+.stats-panel.loading { opacity: 0.55; }

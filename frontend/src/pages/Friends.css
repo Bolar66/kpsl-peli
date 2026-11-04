@@ -1,0 +1,66 @@
+/* ---------- Kaverit ---------- */
+.code-card, .add-card { display: flex; flex-direction: column; gap: 12px; }
+.my-code {
+  font-family: var(--font-display);
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-align: center;
+  padding: 6px 0;
+}
+.code-actions { display: flex; flex-direction: column; align-items: stretch; gap: 6px; }
+.add-hint, .add-status { margin: 0; font-size: 13px; }
+
+.friend-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.friend-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-top: 1px solid var(--border);
+}
+.friend-row:first-child { border-top: none; }
+.friend-link { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; color: var(--text); text-decoration: none; }
+.friend-main { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.friend-main b { font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.friend-avatar { position: relative; flex-shrink: 0; display: inline-flex; }
+.friend-avatar.online::after, .friend-avatar.playing::after {
+  content: '';
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #3DDC84;
+  box-shadow: 0 0 0 2px var(--surface);
+}
+.friend-avatar.playing::after { background: var(--accent); }
+.friend-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.icon-btn.small { width: 32px; height: 32px; font-size: 12px; }
+.count-badge {
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.push-card { display: flex; flex-direction: column; gap: 12px; }
+.push-card .section-head { margin-bottom: 0; }
+.push-text { margin: 0; font-size: 14px; }
+
+/* Keskinäiset ottelut */
+.h2h { display: flex; align-items: center; justify-content: center; gap: 18px; }
+.h2h-side { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; }
+.h2h-side b { font-family: var(--font-display); font-size: 30px; line-height: 1; }
+.h2h-side.lead b { color: var(--accent-text); }
+.h2h-side .faint { font-size: 12px; max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.h2h-vs { font-size: 24px; color: var(--text-3); }
+.remove-friend { margin-top: 4px; }

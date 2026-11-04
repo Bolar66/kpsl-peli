@@ -40,3 +40,10 @@ services:
       # Pelaajien palaute lähetetään tähän osoitteeseen (tallentuu myös tietokantaan)
       - key: FEEDBACK_EMAIL
         sync: false
+      # Push-ilmoitukset (pelikutsut, kaveripyynnöt). Avainpari: npx web-push generate-vapid-keys
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: VAPID_SUBJECT
+        sync: false

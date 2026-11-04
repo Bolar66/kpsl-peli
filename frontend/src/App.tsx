@@ -12,6 +12,9 @@ import Privacy from './pages/Privacy';
 import ResetPassword from './pages/ResetPassword';
 import ErrorBoundary from './components/ErrorBoundary';
 import ServerWake from './components/ServerWake';
+import { PresenceProvider } from './context/PresenceContext';
+import Friends from './pages/Friends';
+import PlayerProfile from './pages/PlayerProfile';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { token } = useAuth();
@@ -65,6 +68,22 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       />
+      <Route
+        path="/kaverit"
+        element={
+          <ProtectedRoute>
+            <Friends />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/pelaaja/:userId"
+        element={
+          <ProtectedRoute>
+            <PlayerProfile />
+          </ProtectedRoute>
+        }
+      />
       <Route path="/tietosuoja" element={<Privacy />} />
       <Route path="/palauta" element={<ResetPassword />} />
       <Route path="*" element={<Navigate to="/login" />} />
@@ -77,7 +96,9 @@ function App() {
     <ErrorBoundary>
       <AuthProvider>
         <BrowserRouter>
-          <AppRoutes />
+          <PresenceProvider>
+            <AppRoutes />
+          </PresenceProvider>
           <ServerWake />
         </BrowserRouter>
       </AuthProvider>
