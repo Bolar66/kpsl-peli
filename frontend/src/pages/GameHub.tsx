@@ -8,6 +8,8 @@ import FeedbackSheet from '../components/FeedbackSheet';
 import InstallHint from '../components/InstallHint';
 import WhatsNew from '../components/WhatsNew';
 import { hasUnseenWhatsNew } from '../constants/whatsNew';
+import PushPrompt from '../components/PushPrompt';
+import { shouldPromptPush } from '../constants/push';
 import './Lobby.css';
 
 // Tulevat pelit näytetään valikossa lukittuina, jotta pelaajat näkevät mitä on tulossa
@@ -22,12 +24,15 @@ export default function GameHub() {
   const { user } = useAuth();
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [whatsNewOpen, setWhatsNewOpen] = useState(hasUnseenWhatsNew);
+  const [pushPromptOpen, setPushPromptOpen] = useState(shouldPromptPush);
 
   return (
     <div className="lobby-page">
       <AppHeader left={<BowlLogo size={30} />} />
       <FeedbackSheet open={feedbackOpen} onClose={() => setFeedbackOpen(false)} />
       <WhatsNew open={whatsNewOpen} onClose={() => setWhatsNewOpen(false)} />
+      {/* Ilmoituksista kysytään esittelyn jälkeen */}
+      <PushPrompt open={pushPromptOpen && !whatsNewOpen} onClose={() => setPushPromptOpen(false)} />
 
       <motion.main
         className="lobby-main"
