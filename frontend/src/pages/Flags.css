@@ -115,10 +115,6 @@
 
 /* Kysymys */
 .flag-question { display: flex; flex-direction: column; gap: 14px; }
-.flag-timer { height: 6px; border-radius: 999px; background: var(--surface-3); overflow: hidden; }
-.flag-timer-fill { height: 100%; background: var(--accent); transform-origin: left center; }
-.flag-timer-fill.low { background: var(--danger); }
-.flag-timer-fill.stopped { opacity: 0.4; }
 
 .flag-frame {
   position: relative;
@@ -241,8 +237,6 @@
 @keyframes flag-shake { 20%, 60% { transform: translateX(-6px); } 40%, 80% { transform: translateX(6px); } }
 
 /* Viimeiset sekunnit: palkki sykkii */
-.flag-timer.urgent { animation: timer-pulse 0.5s ease-in-out infinite alternate; }
-@keyframes timer-pulse { to { transform: scaleY(1.8); } }
 
 /* Kirjoittaessa lippu pienenee, jotta kenttä ja nappi mahtuvat näppäimistön yläpuolelle */
 .flag-question.typing .flag-frame { max-height: 20dvh; width: auto; aspect-ratio: 4 / 3; }
@@ -274,3 +268,97 @@
 .over-tools .btn { flex: 1 1 140px; min-height: 44px; font-size: 14px; }
 .flag-rules { margin: 0 0 12px; padding-left: 18px; display: flex; flex-direction: column; gap: 8px; font-size: 14px; line-height: 1.45; color: var(--text-2); text-align: left; }
 .flag-rules b { color: var(--text); }
+
+/* ---------- GeoGuessr-tyylinen ajastin ---------- */
+.flag-timer-wrap { display: flex; align-items: center; gap: 10px; padding-top: 12px; }
+.flag-timer {
+  position: relative;
+  flex: 1;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  overflow: visible;
+}
+.flag-timer-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--accent);
+  box-shadow: 0 0 12px var(--accent-soft), 0 0 2px var(--accent);
+  transform-origin: left center;
+  transition: background 0.4s ease, box-shadow 0.4s ease;
+}
+.flag-timer-fill[data-level="mid"] { background: var(--warn); box-shadow: 0 0 12px var(--warn-soft); }
+.flag-timer-fill[data-level="low"] { background: var(--danger); box-shadow: 0 0 16px var(--danger-soft), 0 0 3px var(--danger); }
+.flag-timer.urgent .flag-timer-fill { animation: timer-pulse 0.5s ease-in-out infinite alternate; }
+@keyframes timer-pulse { to { filter: brightness(1.35); box-shadow: 0 0 22px var(--danger), 0 0 4px var(--danger); } }
+.flag-timer-seconds {
+  min-width: 28px;
+  text-align: right;
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.flag-room.urgent .flag-timer-seconds { color: var(--danger); }
+/* Vastanneiden profiilikuvat palkissa vastaushetken kohdalla */
+.timer-mark {
+  position: absolute;
+  top: 50%;
+  margin: -12px 0 0 -12px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px var(--bg), 0 3px 8px var(--shadow-color);
+  z-index: 2;
+}
+.timer-mark.me { box-shadow: 0 0 0 2px var(--accent-line), 0 3px 8px var(--shadow-color); z-index: 3; }
+
+/* Kiire: punainen hehku näytön reunoilla */
+.flag-room::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  box-shadow: inset 0 0 0 0 transparent;
+  transition: box-shadow 0.3s ease;
+  z-index: 40;
+}
+.flag-room.urgent::after { box-shadow: inset 0 0 70px 6px rgba(255, 60, 60, 0.35); animation: vignette 0.5s ease-in-out infinite alternate; }
+@keyframes vignette { to { box-shadow: inset 0 0 90px 12px rgba(255, 60, 60, 0.5); } }
+
+/* ---------- Yläpalkki: pisteet ja edistyminen ---------- */
+.topbar-score { display: inline-flex; align-items: baseline; gap: 4px; font-family: var(--font-display); }
+.topbar-score b { font-size: 24px; font-weight: 700; line-height: 1; display: inline-block; }
+.topbar-score small { font-size: 12px; color: var(--text-3); }
+.topbar-streak { margin-left: 6px; font-size: 14px; color: var(--warn); font-weight: 700; display: inline-block; }
+.progress-dots { display: flex; gap: 4px; margin-top: 5px; flex-wrap: wrap; justify-content: center; max-width: 220px; }
+.progress-dots i { width: 7px; height: 7px; border-radius: 50%; background: var(--surface-3); transition: background 0.3s ease, transform 0.3s var(--ease); }
+.progress-dots i.current { background: var(--text-3); transform: scale(1.35); }
+.progress-dots i.full { background: var(--accent); }
+.progress-dots i.half { background: var(--warn); }
+.progress-dots i.wrong, .progress-dots i.none { background: var(--danger); }
+
+/* ---------- Lippu: kiilto ja paljastuksen hehku ---------- */
+.flag-frame { perspective: 600px; transition: box-shadow 0.3s ease; }
+.flag-shine {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(115deg, transparent 35%, rgba(255, 255, 255, 0.28) 50%, transparent 65%);
+  transform: translateX(-120%);
+  animation: flag-shine 1.1s 0.15s ease-out forwards;
+}
+@keyframes flag-shine { to { transform: translateX(120%); } }
+.flag-frame.is-correct { box-shadow: 0 0 0 3px var(--accent-line), 0 0 34px var(--accent-soft), 0 10px 30px var(--shadow-color); }
+.flag-frame.is-half { box-shadow: 0 0 0 3px var(--warn), 0 10px 30px var(--shadow-color); }
+.flag-frame.is-wrong { box-shadow: 0 0 0 3px var(--danger), 0 0 30px var(--danger-soft), 0 10px 30px var(--shadow-color); }
+
+/* Lähtölaskenta: numero sykkii renkaan keskellä */
+.flag-countdown span {
+  width: 150px;
+  height: 150px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 0 4px var(--accent-line), 0 0 60px var(--accent-soft), inset 0 0 40px var(--accent-soft);
+}

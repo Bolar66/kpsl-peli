@@ -5,7 +5,7 @@ import ChatBubble, { type BubbleData } from './ChatBubble';
 import {
   CHOICE_SECONDS, COUNT_OPTIONS, EXTRAS, HINT_OPTIONS, LEVELS, LEVEL_BY_VALUE, WRITE_SECONDS, type QuizSettings,
 } from '../constants/flags';
-import { sfx } from '../constants/sound';
+import { flagFx } from '../constants/sound';
 
 // ---------- Palvelimen viestien muodot ----------
 export interface FlagPlayer {
@@ -203,32 +203,64 @@ function useQuestionProgress(question: FlagQuestion, stopped: boolean, apply: (p
   }, [question, stopped]);
 }
 
-// Viimeisillä kolmella sekunnilla palkki sykkii ja kello tikittää
-function TimerBar({ question, stopped }: { question: FlagQuestion; stopped: boolean }) {
+// Vastauksen merkki ajastimessa: kuka vastasi ja kuinka paljon aikaa oli silloin kulunut
+export interface AnswerMark {
+  player: FlagPlayer;
+  elapsedMs: number;
+}
+
+// GeoGuessr-tyylinen ajastin: aika kuluu loppuun asti kaikilla, ja vastanneiden profiilikuvat jäävät
+// palkkiin vastaushetken kohdalle. Viimeisillä kolmella sekunnilla palkki sykkii ja sydän lyö.
+function TimerBar({ question, stopped, marks, myUserId }: { question: FlagQuestion; stopped: boolean; marks: AnswerMark[]; myUserId?: number }) {
   const bar = useRef<HTMLDivElement>(null);
   const fill = useRef<HTMLDivElement>(null);
-  const lastTick = useRef<number | null>(null);
+  const seconds = useRef<HTMLSpanElement>(null);
+  const lastBeat = useRef<number | null>(null);
   useQuestionProgress(question, stopped, (p, remainingMs) => {
-    if (!fill.current || !bar.current) return;
+    if (!fill.current || !bar.current || !seconds.current) return;
     fill.current.style.transform = `scaleX(${1 - p})`;
-    const seconds = Math.ceil(remainingMs / 1000);
-    const urgent = !stopped && seconds <= 3 && remainingMs > 0;
+    const left = Math.ceil(remainingMs / 1000);
+    seconds.current.textContent = String(left);
+    const urgent = !stopped && left <= 3 && remainingMs > 0;
+    const level = p > 0.7 ? 'low' : p > 0.45 ? 'mid' : '';
+    fill.current.dataset.level = level;
     bar.current.classList.toggle('urgent', urgent);
-    if (urgent && lastTick.current !== seconds) {
-      lastTick.current = seconds;
-      sfx.tick(seconds === 1);
+    bar.current.closest('.flag-room')?.classList.toggle('urgent', urgent);
+    if (urgent && lastBeat.current !== left) {
+      lastBeat.current = left;
+      flagFx.heartbeat(left === 1);
     }
   });
+  // Tauko tai paljastus poistaa kiireen tehosteen
+  useEffect(() => {
+    if (stopped) document.querySelector('.flag-room')?.classList.remove('urgent');
+  }, [stopped]);
   return (
-    <div ref={bar} className="flag-timer" aria-hidden="true">
-      <div ref={fill} className={`flag-timer-fill ${stopped ? 'stopped' : ''}`} />
+    <div className="flag-timer-wrap">
+      <div ref={bar} className="flag-timer" aria-hidden="true">
+        <div ref={fill} className="flag-timer-fill" />
+        {marks.map(m => (
+          <motion.span
+            key={m.player.userId}
+            className={`timer-mark ${m.player.userId === myUserId ? 'me' : ''}`}
+            style={{ left: `${Math.max(0, Math.min(1, 1 - m.elapsedMs / question.timeMs)) * 100}%` }}
+            initial={{ scale: 0, y: -6 }}
+            animate={{ scale: 1, y: 0 }}
+            transition={{ type: 'spring', stiffness: 600, damping: 20 }}
+            title={`${m.player.username}: ${(m.elapsedMs / 1000).toFixed(1)} s`}
+          >
+            <Avatar player={{ userId: m.player.userId, username: m.player.username, avatarEmoji: m.player.avatarEmoji, avatarColor: m.player.avatarColor, avatarImage: m.player.avatarImage }} size={22} />
+          </motion.span>
+        ))}
+      </div>
+      <span ref={seconds} className="flag-timer-seconds" aria-hidden="true">{Math.ceil(question.remainingMs / 1000)}</span>
     </div>
   );
 }
 
 // Lippukuva efekteineen: paljastuva lippu tarkentuu, palanen lippua laajenee kulmasta.
 // Efekti valmistuu, kun 80 % ajasta on kulunut tai kun pelaaja on vastannut.
-function FlagImage({ src, question, done }: { src: string; question: FlagQuestion; done: boolean }) {
+function FlagImage({ src, question, done, verdict }: { src: string; question: FlagQuestion; done: boolean; verdict?: string }) {
   const img = useRef<HTMLImageElement>(null);
   const corner = ['top left', 'top right', 'bottom left', 'bottom right', 'center'][question.index % 5];
   const effect = done ? 'normal' : question.display;
@@ -240,19 +272,26 @@ function FlagImage({ src, question, done }: { src: string; question: FlagQuestio
     img.current.style.transform = effect === 'piece' ? `scale(${(5 - 4 * ease).toFixed(3)})` : '';
   });
   return (
-    <div className="flag-frame">
+    <motion.div
+      className={`flag-frame ${verdict ? `is-${verdict}` : ''}`}
+      initial={{ opacity: 0, scale: 0.9, rotateX: 18 }}
+      animate={{ opacity: 1, scale: 1, rotateX: 0 }}
+      transition={{ type: 'spring', stiffness: 320, damping: 24 }}
+    >
       <img ref={img} src={src} alt="Lippu" draggable={false} style={{ transformOrigin: corner }} />
-    </div>
+      <span className="flag-shine" aria-hidden="true" />
+    </motion.div>
   );
 }
 
 // ---------- Kysymys ja sen paljastus ----------
 // Paljastus näytetään samassa näkymässä: oikea vaihtoehto vihreänä, oma väärä punaisena
-export function FlagQuestionView({ question, reveal, myUserId, players, answered, myAnswer, hint, hintsLeft, paused, onAnswer, onHint }: {
+export function FlagQuestionView({ question, reveal, myUserId, players, marks, answered, myAnswer, hint, hintsLeft, paused, onAnswer, onHint }: {
   question: FlagQuestion;
   reveal: FlagReveal | null;
   myUserId?: number;
   players: FlagPlayer[];
+  marks: AnswerMark[];
   answered: boolean;
   myAnswer: string | number | boolean | null;
   hint: HintState | null;
@@ -293,7 +332,7 @@ export function FlagQuestionView({ question, reveal, myUserId, players, answered
 
   return (
     <div className={`flag-question ${typing && !shown ? 'typing' : ''} ${mine && (mine.correctness === 'wrong' || mine.correctness === 'none') ? 'shake' : ''} ${paused ? 'paused' : ''}`}>
-      <TimerBar question={question} stopped={locked} />
+      <TimerBar question={question} stopped={!!shown || paused} marks={marks} myUserId={myUserId} />
 
       {question.kind === 'flagChoice' ? (
         <>
@@ -314,7 +353,7 @@ export function FlagQuestionView({ question, reveal, myUserId, players, answered
         </>
       ) : (
         <>
-          <FlagImage src={question.image!} question={question} done={locked} />
+          <FlagImage src={question.image!} question={question} done={locked} verdict={mine ? (mine.correctness === 'full' ? 'correct' : mine.correctness === 'half' ? 'half' : 'wrong') : undefined} />
           {question.kind === 'trueFalse' && <p className="flag-prompt">Onko tämä lippu <b>{question.name}</b>?</p>}
           {question.kind === 'choice' && !shown && <p className="flag-prompt">Minkä maan lippu?</p>}
           {question.kind === 'write' && !shown && <p className="flag-prompt">Kirjoita maan nimi</p>}

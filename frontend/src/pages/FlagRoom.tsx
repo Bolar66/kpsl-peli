@@ -12,11 +12,11 @@ import InviteFriendsSheet from '../components/InviteFriendsSheet';
 import type { BubbleData } from '../components/ChatBubble';
 import {
   FlagGameOverView, FlagPlayerChips, FlagQuestionView, FlagRevealView, FlagRules, FlagSettingsPanel,
-  type FlagOver, type FlagPlayer, type FlagQuestion, type FlagReveal, type HintState,
+  type AnswerMark, type Correctness, type FlagOver, type FlagPlayer, type FlagQuestion, type FlagReveal, type HintState,
 } from '../components/FlagViews';
 import { BUBBLE_MS, EMOTE_BUBBLE_MS, isBigEmoji, type ChatMessage } from '../constants/chat';
 import { LEVEL_BY_VALUE, type QuizSettings } from '../constants/flags';
-import { sfx, crowdFx } from '../constants/sound';
+import { sfx, crowdFx, flagFx } from '../constants/sound';
 import { setMusic } from '../constants/music';
 import { setMusicMuffled } from '../constants/audioEngine';
 import { haptic } from '../constants/players';
@@ -62,6 +62,9 @@ export default function FlagRoom() {
   const [reveal, setReveal] = useState<FlagReveal | null>(null);
   const [over, setOver] = useState<FlagOver | null>(null);
   const [streak, setStreak] = useState(0);
+  // Vastausajat ajastimen merkkejä varten (nykyinen kysymys) ja omat tulokset edistymispalloihin
+  const [answerTimes, setAnswerTimes] = useState<{ index: number; times: Record<number, number> }>({ index: -1, times: {} });
+  const [myResults, setMyResults] = useState<Correctness[]>([]);
   const [startingAt, setStartingAt] = useState<number | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [rejected, setRejected] = useState('');
@@ -105,23 +108,25 @@ export default function FlagRoom() {
       setReveal(null);
       setQuestion(null);
       setStreak(0);
+      setMyResults([]);
       setNow(Date.now());
       setStartingAt(Date.now() + inMs);
-      sfx.roundStart();
     });
     s.on('fq:question', (q: Omit<FlagQuestion, 'receivedAt'>) => {
       setStartingAt(null);
       setReveal(null);
       setQuestion({ ...q, receivedAt: Date.now() });
       setMyAnswer(null);
-      sfx.flip();
+      setAnswerTimes({ index: q.index, times: {} });
+      flagFx.whoosh();
     });
     // Tauon jälkeen kysymyksen aika jatkuu siitä, mihin se jäi
     s.on('fq:resumed', ({ question: q }: { question: Omit<FlagQuestion, 'receivedAt'> | null }) => {
       if (q) setQuestion({ ...q, receivedAt: Date.now() });
     });
-    s.on('fq:answered', ({ userId }: { userId: number }) => {
+    s.on('fq:answered', ({ userId, elapsedMs }: { userId: number; elapsedMs: number }) => {
       setRoom(prev => prev && { ...prev, players: prev.players.map(p => (p.userId === userId ? { ...p, answered: true } : p)) });
+      setAnswerTimes(prev => ({ ...prev, times: { ...prev.times, [userId]: elapsedMs } }));
     });
     s.on('fq:hint', (h: HintState & { hintsLeft: number }) => {
       setHint({ index: h.index, letters: h.letters, removed: h.removed });
@@ -131,9 +136,14 @@ export default function FlagRoom() {
       setReveal(r);
       const mine = r.results.find(x => x.userId === myIdRef.current);
       setStreak(mine?.streak ?? 0);
-      if (mine?.correctness === 'full') { sfx.win(); haptic(30); }
-      else if (mine?.correctness === 'half') sfx.draw();
-      else { sfx.lose(); haptic([20, 40, 20]); }
+      setMyResults(prev => {
+        const next = [...prev];
+        next[r.index] = mine?.correctness ?? 'none';
+        return next;
+      });
+      if (mine?.correctness === 'full') { flagFx.correct(mine.streak); haptic(30); }
+      else if (mine?.correctness === 'half') flagFx.half();
+      else { flagFx.wrong(); haptic([20, 40, 20]); }
     });
     s.on('fq:over', (o: FlagOver) => {
       setOver(o);
@@ -204,11 +214,25 @@ export default function FlagRoom() {
     return () => clearInterval(t);
   }, [startingAt]);
   const countdown = startingAt ? Math.max(1, Math.ceil((startingAt - now) / 1000)) : null;
+  const lastCountdown = useRef<number | null>(null);
+  useEffect(() => {
+    if (countdown === null || countdown === lastCountdown.current) return;
+    lastCountdown.current = countdown;
+    flagFx.countdown(countdown === 1);
+  }, [countdown]);
 
   const me = room?.players.find(p => p.userId === user?.id);
   const answeredCount = room?.players.filter(p => p.answered).length ?? 0;
   const connectedCount = room?.players.filter(p => p.connected).length ?? 0;
   const memberIds = useMemo(() => room?.players.map(p => p.userId) ?? [], [room?.players]);
+  // Ajastimeen merkittävät vastaukset: kuka vastasi ja milloin (vain nykyinen kysymys)
+  const marks: AnswerMark[] = useMemo(() => {
+    if (!room || !question || answerTimes.index !== question.index) return [];
+    return Object.entries(answerTimes.times).flatMap(([id, elapsedMs]) => {
+      const player = room.players.find(p => p.userId === Number(id));
+      return player ? [{ player, elapsedMs }] : [];
+    });
+  }, [room, question, answerTimes]);
   const iAmReady = !!room?.paused && !!user && room.paused.ready.includes(user.id);
   const lastMessage = chat.length ? chat[chat.length - 1]! : null;
 
@@ -226,7 +250,7 @@ export default function FlagRoom() {
     if (!question || myAnswer?.index === question.index || paused) return;
     setMyAnswer({ index: question.index, value });
     socket?.emit('fq:answer', { index: question.index, value });
-    sfx.pick();
+    flagFx.lock();
   }
 
   function sendChat(message: { text?: string; emote?: string }) {
@@ -287,10 +311,17 @@ export default function FlagRoom() {
         <div className="room-topbar-center">
           {(phase === 'question' && question) || (phase === 'reveal' && reveal) ? (
             <>
-              <span className="topbar-round">Lippu {shownIndex + 1}/{question?.total ?? room?.settings.count}</span>
-              <span className="eyebrow">
-                {room?.practice ? 'Harjoitus' : room ? LEVEL_BY_VALUE[room.settings.level].label : ''} · {me?.score ?? 0} p
-                {streak >= 2 && <span className="topbar-streak"> · 🔥{streak}</span>}
+              <span className="topbar-score">
+                <motion.b key={me?.score ?? 0} initial={{ scale: 1.35, color: 'var(--accent-text)' }} animate={{ scale: 1, color: 'var(--text)' }} transition={{ duration: 0.45 }}>
+                  {(me?.score ?? 0).toLocaleString('fi-FI')}
+                </motion.b>
+                <small>p</small>
+                {streak >= 2 && <motion.span key={streak} className="topbar-streak" initial={{ scale: 0 }} animate={{ scale: 1 }}>🔥{streak}</motion.span>}
+              </span>
+              <span className="progress-dots" aria-label={`Lippu ${shownIndex + 1}/${question?.total ?? room?.settings.count}`}>
+                {Array.from({ length: question?.total ?? room?.settings.count ?? 0 }, (_, i) => (
+                  <i key={i} className={`${myResults[i] ?? ''} ${i === shownIndex ? 'current' : ''}`} />
+                ))}
               </span>
             </>
           ) : (
@@ -375,6 +406,7 @@ export default function FlagRoom() {
                 reveal={phase === 'reveal' ? reveal : null}
                 myUserId={user?.id}
                 players={room.players}
+                marks={marks}
                 answered={myAnswer?.index === question.index}
                 myAnswer={myAnswer?.index === question.index ? myAnswer.value : null}
                 hint={hint}

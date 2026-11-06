@@ -299,7 +299,8 @@ function submitAnswer(room: Room, userId: number, index: number, value: unknown)
   if (!result) return;
   const answer: Answer = { ...result, points: scoreAnswer(result.correctness, elapsedMs, q.timeMs), elapsedMs };
   room.answers.set(userId, answer);
-  ns?.to(room.code).emit('fq:answered', { userId });
+  // Vastausaika kerrotaan muille (ajastimeen merkitään, milloin kukin vastasi); oikeellisuus vasta paljastuksessa
+  ns?.to(room.code).emit('fq:answered', { userId, elapsedMs });
   // Kaikki paikalla olevat vastasivat: paljastus heti
   if (connectedPlayers(room).every(p => room.answers.has(p.userId))) {
     schedule(room, () => revealQuestion(room), room.solo ? 150 : 600);

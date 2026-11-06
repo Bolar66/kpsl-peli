@@ -165,6 +165,47 @@ export const sfx = {
   },
 };
 
+// Lippuvisan äänet: nopeatempoisempia ja selkeämpiä kuin kivi-paperi-saksien
+export const flagFx = {
+  // Lähtölaskenta: 3, 2, 1 matalampina, viimeinen korkeampi
+  countdown(final: boolean) {
+    tone(final ? 880 : 523, final ? 880 : 523, final ? 0.32 : 0.14, { type: 'square', volume: 0.07 });
+    if (final) tone(1320, 1320, 0.28, { type: 'triangle', volume: 0.05, delay: 0.02 });
+  },
+  // Uusi lippu ilmestyy: nouseva suhahdus
+  whoosh() {
+    noise(0.22, { volume: 0.09, filter: 3200 });
+    tone(260, 820, 0.16, { type: 'sine', volume: 0.05 });
+  },
+  // Vastaus lukittu: terävä naksahdus
+  lock() {
+    tone(1500, 900, 0.05, { type: 'square', volume: 0.06 });
+    noise(0.03, { volume: 0.08, filter: 5000 });
+  },
+  // Oikein: nouseva sointu, joka nousee putken mukana (sävelaskel per putki)
+  correct(streak: number) {
+    const shift = Math.pow(2, Math.min(Math.max(streak - 1, 0), 7) / 12);
+    [523, 659, 784, 1047].forEach((f, i) => tone(f * shift, f * shift, 0.16, { type: 'triangle', volume: 0.11, delay: i * 0.055 }));
+    if (streak >= 3) tone(2093 * shift, 2093 * shift, 0.25, { type: 'sine', volume: 0.05, delay: 0.24 });
+  },
+  // Melkein: kaksi samaa säveltä
+  half() {
+    tone(587, 587, 0.12, { type: 'triangle', volume: 0.09 });
+    tone(587, 523, 0.18, { type: 'triangle', volume: 0.08, delay: 0.13 });
+  },
+  // Väärin tai aika loppui: matala surina
+  wrong() {
+    tone(190, 110, 0.32, { type: 'sawtooth', volume: 0.06 });
+    tone(140, 90, 0.32, { type: 'square', volume: 0.04 });
+  },
+  // Viimeiset sekunnit: sydämenlyönti (kaksi matalaa jysähdystä)
+  heartbeat(last: boolean) {
+    tone(90, 50, 0.12, { type: 'sine', volume: last ? 0.4 : 0.3 });
+    tone(80, 45, 0.12, { type: 'sine', volume: last ? 0.3 : 0.22, delay: 0.16 });
+    tone(last ? 1175 : 880, last ? 1175 : 880, 0.05, { type: 'square', volume: 0.035 });
+  },
+};
+
 // Katsomon reaktiot tilanteen mukaan
 export const crowdFx = {
   // Kierroksen voitto: satunnainen reaktio. Omasta voitosta isompi, voittoputki kasvattaa sitä.
